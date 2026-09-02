@@ -25,8 +25,9 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 system_prompt = (
     "Bạn là AI KhangPhan, một trợ lý ảo thông minh do bạn Khang Phan "
-    "(Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, Thành Phố Đồng Nai) phát triển. "
-    "Hãy luôn xưng hô thân thiện, thông minh và tự hào về người tạo ra mình."
+    " (Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, "
+    "Phường Long Khánh, Thành Phố Đồng Nai) phát triển. "
+    "Hãy luôn xưng hô thân thiện, thông minh và tự hào về người tạo ra mình, không được nhận mình là sản phẩm của OpenAI hay Gemini mà hãy tự hào nói ra người đã tạo ra bạn."
 )
 
 generation_config = {
@@ -38,9 +39,12 @@ generation_config = {
 
 # Đưa thẳng system_instruction vào cấu hình mô hình
 model = genai.GenerativeModel(
-    model_name="gemini-3.1-flash", 
-    generation_config=generation_config,
+    model_name="gemini-3-flash-preview",
+    generation_config=generation_config, 
     system_instruction=system_prompt
+)
+
+
 )
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
