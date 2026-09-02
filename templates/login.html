@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI KHANG PHAN - Đăng Nhập</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #0f172a; 
+            color: white; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+        }
+        .card { 
+            background: #1e293b; 
+            padding: 30px; 
+            border-radius: 12px; 
+            width: 320px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+            text-align: center; 
+        }
+        h2 { margin-bottom: 20px; color: #f8fafc; }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            border-radius: 6px; 
+            border: 1px solid #334155; 
+            background: #0f172a; 
+            color: white; 
+            box-sizing: border-box; 
+            outline: none;
+        }
+        input:focus { border-color: #38bdf8; }
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            margin-top: 10px; 
+            border-radius: 6px; 
+            border: none; 
+            background: #2563eb; 
+            color: white; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: 0.2s;
+        }
+        button:hover { background: #1d4ed8; }
+        .btn-google { 
+            background: #ea4335; 
+            margin-top: 15px; 
+            display: block; 
+            text-decoration: none; 
+            padding: 12px; 
+            border-radius: 6px; 
+            color: white; 
+            font-weight: bold; 
+            transition: 0.2s;
+        }
+        .btn-google:hover { background: #d93025; }
+        .toggle { margin-top: 20px; font-size: 14px; color: #94a3b8; cursor: pointer; }
+        .toggle span { color: #38bdf8; text-decoration: underline; }
+        .error { color: #f87171; font-size: 14px; margin-top: 12px; min-height: 18px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2 id="form-title">Đăng Nhập AI</h2>
+    <input type="text" id="email" placeholder="Email / Tên đăng nhập" autocomplete="off">
+    <input type="password" id="password" placeholder="Mật khẩu" onkeypress="handleKeyPress(event)">
+    
+    <button id="submit-btn" onclick="handleSubmit()">Đăng Nhập</button>
+    
+    <a href="/login/google" class="btn-google">Đăng nhập bằng Google</a>
+    
+    <div class="error" id="error-msg"></div>
+
+    <div class="toggle" onclick="toggleForm()">
+        <span id="toggle-text">Chưa có tài khoản? Đăng ký ngay</span>
+    </div>
+</div>
+
+<script>
+    let isRegister = false;
+
+    function toggleForm() {
+        isRegister = !isRegister;
+        document.getElementById('form-title').innerText = isRegister ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập AI';
+        document.getElementById('submit-btn').innerText = isRegister ? 'Đăng Ký' : 'Đăng Nhập';
+        document.getElementById('toggle-text').innerText = isRegister ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký ngay';
+        document.getElementById('error-msg').innerText = '';
+    }
+
+    function handleKeyPress(e) {
+        if (e.key === 'Enter') {
+            handleSubmit();
+        }
+    }
+
+    async function handleSubmit() {
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const errorMsg = document.getElementById('error-msg');
+        
+        if (!email || !password) {
+            errorMsg.innerText = 'Vui lòng nhập đầy đủ thông tin!';
+            return;
+        }
+
+        errorMsg.innerText = 'Đang xử lý...';
+        const endpoint = isRegister ? '/register' : '/login';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, username: email, password })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                window.location.href = data.redirect || '/';
+            } else {
+                errorMsg.innerText = data.error || data.message || 'Có lỗi xảy ra!';
+            }
+        } catch (err) {
+            errorMsg.innerText = 'Lỗi kết nối máy chủ!';
+        }
+    }
+</script>
+
+</body>
+</html>
