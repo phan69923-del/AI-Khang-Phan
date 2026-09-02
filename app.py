@@ -44,9 +44,6 @@ model = genai.GenerativeModel(
     system_instruction=system_prompt
 )
 
-
-)
-
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 client_secrets_file = os.path.join(os.path.dirname(__file__), "client_secret.json")
 
