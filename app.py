@@ -27,7 +27,7 @@ generation_config = {
     "top_k": 40,
     "max_output_tokens": 8192,
 }
-model = genai.GenerativeModel(model_name="gemini-1.5-flash", generation_config=generation_config)
+model = genai.GenerativeModel(model_name="gemini-3.1-flash", generation_config=generation_config)
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "ĐIỀN_CLIENT_ID_CỦA_BRO")
 client_secrets_file = os.path.join(os.path.dirname(__file__), "client_secret.json")
