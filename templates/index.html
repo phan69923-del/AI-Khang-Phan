@@ -309,154 +309,781 @@
             background-color: #282a2c;
         }
 
-        @media screen and (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            .sidebar.active {
-                transform: translateX(0);
-            }
-            .main-chat {
-                margin-left: 0 !important;
-                width: 100% !important;
-            }
-            .menu-toggle-btn {
-                display: block;
-            }
-        }
-    </style>
-</head>
-<body>
-
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-top">
-            <div class="sidebar-logo-container">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="AI KhangPhan Logo">
-                <span>AI KhangPhan</span>
-            </div>
-            <button class="new-chat-btn" onclick="location.reload();">
-                <i class="fa-solid fa-plus"></i> Đoạn chat mới
-            </button>
-        </div>
-        
-        <div class="chat-history">
-            <div class="history-item"><i class="fa-regular fa-message"></i> Trợ lý ảo AI KhangPhan</div>
-        </div>
-
-        <div class="sidebar-footer">
-            <p style="margin-bottom: 8px;">Khang Phan WorkSpace</p>
-            <div class="footer-actions">
-                <button class="footer-btn" onclick="toggleTheme()" title="Đổi giao diện Sáng/Tối">
-                    <i class="fa-solid fa-moon" id="themeIcon"></i> Sáng/Tối
-                </button>
-                <a href="/logout" class="footer-btn" title="Đăng xuất tài khoản">
-                    <i class="fa-solid fa-right-from-bracket"></i> Thoát
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <div class="main-chat">
-        <div class="chat-header">
-            <button class="menu-toggle-btn" onclick="toggleSidebar()">
-                <i class="fa-solid fa-bars"></i>
-            </button>
-            <span>Trợ lý AI KhangPhan</span>
-        </div>
-
-        <div class="chat-messages" id="chatMessages">
-            <div class="message bot">
-                Chào bạn! Mình là <b>AI KhangPhan</b>, trợ lý ảo thông minh được phát triển bởi bạn <b>Khang Phan</b> (Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, Tỉnh Đồng Nai). Hôm nay mình có thể giúp gì cho bạn nà?
-            </div>
-        </div>
-
-        <div class="chat-input-container">
-            <div class="chat-input-box">
-                <textarea id="userInput" placeholder="Nhập tin nhắn..." rows="1" onkeydown="handleKeyPress(event)"></textarea>
-                <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('active');
+        <!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI KhangPhan - Trợ lý ảo thông minh</title>
+    <link href="https://googleapis.com" rel="stylesheet">
+    <link rel="stylesheet" href="https://cloudflare.com">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
         }
 
-        function toggleTheme() {
-            document.body.classList.toggle('light-mode');
-            const icon = document.getElementById('themeIcon');
-            if (document.body.classList.contains('light-mode')) {
-                icon.classList.replace('fa-moon', 'fa-sun');
-                localStorage.setItem('theme', 'light');
-            } else {
-                icon.classList.replace('fa-sun', 'fa-moon');
-                localStorage.setItem('theme', 'dark');
-            }
+        body {
+            background-color: #131314;
+            color: #e3e3e3;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background 0.3s, color 0.3s;
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            if (localStorage.getItem('theme') === 'light') {
-                document.body.classList.add('light-mode');
-                const icon = document.getElementById('themeIcon');
-                if (icon) icon.classList.replace('fa-moon', 'fa-sun');
-            }
-        });
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
+        /* Light Mode Styles */
+        body.light-mode {
+            background-color: #ffffff;
+            color: #1f1f1f;
+        }
+        body.light-mode .sidebar {
+            background-color: #f0f4f9;
+            border-right: 1px solid #e0e0e0;
+        }
+        body.light-mode .sidebar-logo-container span,
+        body.light-mode .new-chat-btn,
+        body.light-mode .chat-header,
+        body.light-mode .menu-toggle-btn {
+            color: #1f1f1f;
+        }
+        body.light-mode .new-chat-btn {
+            background-color: #e2e7eb;
+        }
+        body.light-mode .new-chat-btn:hover {
+            background-color: #d3dbdf;
+        }
+        body.light-mode .history-item {
+            color: #444746;
+        }
+        body.light-mode .history-item:hover,
+        body.light-mode .history-item.active {
+            background-color: #e2e7eb;
+        }
+        body.light-mode .sidebar-footer {
+            border-top: 1px solid #e0e0e0;
+            color: #5f6368;
+        }
+        body.light-mode .footer-btn {
+            background-color: #e2e7eb;
+            color: #1f1f1f;
+        }
+        body.light-mode .footer-btn:hover {
+            background-color: #d3dbdf;
+        }
+        body.light-mode .main-chat {
+            background-color: #ffffff;
+        }
+        body.light-mode .message.user {
+            background-color: #f0f4f9;
+            color: #1f1f1f;
+        }
+        body.light-mode .message.bot {
+            background-color: #ffffff;
+            color: #1f1f1f;
+            border: 1px solid #e0e0e0;
+        }
+        body.light-mode .chat-input-container {
+            background-color: #ffffff;
+        }
+        body.light-mode .chat-input-box {
+            background-color: #f0f4f9;
+            border: 1px solid #c4c7c5;
+        }
+        body.light-mode .chat-input-box textarea {
+            color: #1f1f1f;
+        }
+        body.light-mode .send-btn {
+            color: #0b57d0;
+        }
+        body.light-mode .send-btn:hover {
+            background-color: #e2e7eb;
+        }
+        body.light-mode .dropdown-menu {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+        }
+        body.light-mode .dropdown-menu button {
+            color: #1f1f1f;
+        }
+        body.light-mode .dropdown-menu button:hover {
+            background-color: #f0f4f9;
         }
 
-        async function sendMessage() {
-            const input = document.getElementById('userInput');
-            const message = input.value.trim();
-            if (!message) return;
-
-            const chatMessages = document.getElementById('chatMessages');
-
-            chatMessages.innerHTML += `<div class="message user">${escapeHtml(message)}</div>`;
-            input.value = '';
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            const loadingId = 'loading-' + Date.now();
-            chatMessages.innerHTML += `<div class="message bot" id="${loadingId}">AI KhangPhan đang suy nghĩ...</div>`;
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
-                });
-
-                const data = await response.json();
-                const botMessageDiv = document.getElementById(loadingId);
-
-                if (response.ok) {
-                    botMessageDiv.innerHTML = formatMessage(data.response);
-                } else {
-                    botMessageDiv.innerHTML = `Lỗi: ${data.error || 'Không thể kết nối đến server.'}`;
-                }
-            } catch (error) {
-                const botMessageDiv = document.getElementById(loadingId);
-                botMessageDiv.innerHTML = `Lỗi hệ thống: ${error.message}`;
-            }
-
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+        .sidebar {
+            width: 260px;
+            background-color: #1e1f20;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            transition: transform 0.3s ease, background-color 0.3s;
         }
 
-        function escapeHtml(text) {
-            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-            return text.replace(/[&<>"']/g, m => map[m]);
+        .sidebar-top {
+            padding: 16px;
         }
 
-        function formatMessage(text) {
-            return escapeHtml(text).replace(/\n/g, '<br>');
+        .sidebar-logo-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            margin-bottom: 20px;
         }
-    </script>
-</body>
-</html>
+
+        .sidebar-logo-container img {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .sidebar-logo-container span {
+            color: #e3e3e3;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .new-chat-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background-color: #282a2c;
+            color: #e3e3e3;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 30px;
+            width: 100%;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .new-chat-btn:hover {
+            background-color: #3c4043;
+        }
+
+        .chat-history {
+            padding: 0 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #c4c7c5;
+            cursor: pointer;
+            margin-top: 5px;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .history-item:hover, .history-item.active {
+            background-color: #282a2c;
+        }
+
+        .history-text {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-left: 8px;
+        }
+
+        /* Nút 3 chấm đổi tên đoạn chat */
+        .menu-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .chat-menu-btn {
+            background: none;
+            border: none;
+            color: #aaa;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px 6px;
+            border-radius: 50%;
+            display: none;
+        }
+
+        .history-item:hover .chat-menu-btn {
+            display: block;
+        }
+
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 25px;
+            background-color: #282a2c;
+            border: 1px solid #3c4043;
+            box-shadow: 0px 4px 12px rgba(0,0,0,0.3);
+            border-radius: 8px;
+            z-index: 100;
+            min-width: 110px;
+            overflow: hidden;
+        }
+
+        .dropdown-menu.show {
+            display: block;
+        }
+
+        .dropdown-menu button {
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            background: none;
+            border: none;
+            text-align: left;
+            cursor: pointer;
+            color: #e3e3e3;
+            font-size: 13px;
+        }
+
+        .dropdown-menu button:hover {
+            background-color: #3c4043;
+        }
+
+        .dropdown-menu button.delete-btn {
+            color: #ff6b6b;
+        }
+
+        .sidebar-footer {
+            padding: 16px;
+            border-top: 1px solid #282a2c;
+            font-size: 13px;
+            color: #8e918f;
+        }
+
+        .footer-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .footer-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background-color: #282a2c;
+            color: #e3e3e3;
+            border: none;
+            padding: 8px 10px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .footer-btn:hover {
+            background-color: #3c4043;
+        }
+
+        .main-chat {
+            margin-left: 260px;
+            width: calc(100% - 260px);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #131314;
+            transition: margin 0.3s ease, width 0.3s ease, background-color 0.3s;
+        }
+
+        .chat-header {
+            padding: 16px 24px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #e3e3e3;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .menu-toggle-btn {
+            background: none;
+            border: none;
+            color: #e3e3e3;
+            font-size: 20px;
+            cursor: pointer;
+            display: none;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .message {
+            max-width: 800px;
+            line-height: 1.6;
+            font-size: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+        }
+
+        .message.user {
+            background-color: #282a2c;
+            align-self: flex-end;
+            color: #e3e3e3;
+        }
+
+        .message.bot {
+            background-color: #1e1f20;
+            align-self: flex-start;
+            color: #e3e3e3;
+            border: 1px solid #282a2c;
+        }
+
+        .chat-input-container {
+            padding: 20px 24px;
+            background-color: #131314;
+        }
+
+        .chat-input-box {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #1e1f20;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            border: 1px solid #3c4043;
+        }
+
+        .chat-input-box textarea {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #e3e3e3;
+            font-size: 15px;
+            resize: none;
+            outline: none;
+            max-height: 120px;
+            padding: 8px 0;
+        }
+
+        .send-btn {
+            background: none;
+      <style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', sans-serif;
+    }
+
+    body {
+        background-color: #131314;
+        color: #e3e3e3;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+        transition: background 0.3s, color 0.3s;
+    }
+
+    /* Light Mode Styles */
+    body.light-mode {
+        background-color: #ffffff;
+        color: #1f1f1f;
+    }
+    body.light-mode .sidebar {
+        background-color: #f0f4f9;
+        border-right: 1px solid #e0e0e0;
+    }
+    body.light-mode .sidebar-logo-container span,
+    body.light-mode .new-chat-btn,
+    body.light-mode .chat-header,
+    body.light-mode .menu-toggle-btn {
+        color: #1f1f1f;
+    }
+    body.light-mode .new-chat-btn {
+        background-color: #e2e7eb;
+    }
+    body.light-mode .new-chat-btn:hover {
+        background-color: #d3dbdf;
+    }
+    body.light-mode .history-item {
+        color: #444746;
+    }
+    body.light-mode .history-item:hover,
+    body.light-mode .history-item.active {
+        background-color: #e2e7eb;
+    }
+    body.light-mode .sidebar-footer {
+        border-top: 1px solid #e0e0e0;
+        color: #5f6368;
+    }
+    body.light-mode .footer-btn {
+        background-color: #e2e7eb;
+        color: #1f1f1f;
+    }
+    body.light-mode .footer-btn:hover {
+        background-color: #d3dbdf;
+    }
+    body.light-mode .main-chat {
+        background-color: #ffffff;
+    }
+    body.light-mode .message.user {
+        background-color: #f0f4f9;
+        color: #1f1f1f;
+    }
+    body.light-mode .message.bot {
+        background-color: #ffffff;
+        color: #1f1f1f;
+        border: 1px solid #e0e0e0;
+    }
+    body.light-mode .chat-input-container {
+        background-color: #ffffff;
+    }
+    body.light-mode .chat-input-box {
+        background-color: #f0f4f9;
+        border: 1px solid #c4c7c5;
+    }
+    body.light-mode .chat-input-box textarea {
+        color: #1f1f1f;
+    }
+    body.light-mode .send-btn {
+        color: #0b57d0;
+    }
+    body.light-mode .send-btn:hover {
+        background-color: #e2e7eb;
+    }
+    body.light-mode .dropdown-menu {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+    }
+    body.light-mode .dropdown-menu button {
+        color: #1f1f1f;
+    }
+    body.light-mode .dropdown-menu button:hover {
+        background-color: #f0f4f9;
+    }
+
+    .sidebar {
+        width: 260px;
+        background-color: #1e1f20;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 1000;
+        transition: transform 0.3s ease, background-color 0.3s;
+    }
+
+    .sidebar-top {
+        padding: 16px;
+    }
+
+    .sidebar-logo-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        margin-bottom: 20px;
+    }
+
+    .sidebar-logo-container img {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .sidebar-logo-container span {
+        color: #e3e3e3;
+        font-weight: 600;
+        font-size: 15px;
+    }
+
+    .new-chat-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background-color: #282a2c;
+        color: #e3e3e3;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 30px;
+        width: 100%;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background 0.2s;
+    }
+
+    .new-chat-btn:hover {
+        background-color: #3c4043;
+    }
+
+    .chat-history {
+        padding: 0 16px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .history-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 20px;
+        font-size: 14px;
+        color: #c4c7c5;
+        cursor: pointer;
+        margin-top: 5px;
+        position: relative;
+        transition: background 0.2s;
+    }
+
+    .history-item:hover, .history-item.active {
+        background-color: #282a2c;
+    }
+
+    .history-text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-left: 8px;
+    }
+
+    /* Nút 3 chấm đổi tên đoạn chat */
+    .menu-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .chat-menu-btn {
+        background: none;
+        border: none;
+        color: #aaa;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 4px 6px;
+        border-radius: 50%;
+        display: none;
+    }
+
+    .history-item:hover .chat-menu-btn {
+        display: block;
+    }
+
+    .dropdown-menu {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 25px;
+        background-color: #282a2c;
+        border: 1px solid #3c4043;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.3);
+        border-radius: 8px;
+        z-index: 100;
+        min-width: 110px;
+        overflow: hidden;
+    }
+
+    .dropdown-menu.show {
+        display: block;
+    }
+
+    .dropdown-menu button {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        background: none;
+        border: none;
+        text-align: left;
+        cursor: pointer;
+        color: #e3e3e3;
+        font-size: 13px;
+    }
+
+    .dropdown-menu button:hover {
+        background-color: #3c4043;
+    }
+
+    .dropdown-menu button.delete-btn {
+        color: #ff6b6b;
+    }
+
+    .sidebar-footer {
+        padding: 16px;
+        border-top: 1px solid #282a2c;
+        font-size: 13px;
+        color: #8e918f;
+    }
+
+    .footer-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .footer-btn {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        background-color: #282a2c;
+        color: #e3e3e3;
+        border: none;
+        padding: 8px 10px;
+        border-radius: 16px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        text-decoration: none;
+        transition: background 0.2s;
+    }
+
+    .footer-btn:hover {
+        background-color: #3c4043;
+    }
+
+    .main-chat {
+        margin-left: 260px;
+        width: calc(100% - 260px);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background-color: #131314;
+        transition: margin 0.3s ease, width 0.3s ease, background-color 0.3s;
+    }
+
+    .chat-header {
+        padding: 16px 24px;
+        font-size: 18px;
+        font-weight: 600;
+        color: #e3e3e3;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .menu-toggle-btn {
+        background: none;
+        border: none;
+        color: #e3e3e3;
+        font-size: 20px;
+        cursor: pointer;
+        display: none;
+    }
+
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .message {
+        max-width: 800px;
+        line-height: 1.6;
+        font-size: 15px;
+        padding: 12px 16px;
+        border-radius: 12px;
+    }
+
+    .message.user {
+        background-color: #282a2c;
+        align-self: flex-end;
+        color: #e3e3e3;
+    }
+
+    .message.bot {
+        background-color: #1e1f20;
+        align-self: flex-start;
+        color: #e3e3e3;
+        border: 1px solid #282a2c;
+    }
+
+    .chat-input-container {
+        padding: 20px 24px;
+        background-color: #131314;
+    }
+
+    .chat-input-box {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: #1e1f20;
+        border-radius: 30px;
+        display: flex;
+        align-items: center;
+        padding: 8px 16px;
+        border: 1px solid #3c4043;
+    }
+
+    .chat-input-box textarea {
+        flex: 1;
+        background: none;
+        border: none;
+        color: #e3e3e3;
+        font-size: 15px;
+        resize: none;
+        outline: none;
+        max-height: 120px;
+        padding: 8px 0;
+    }
+
+    .send-btn {
+        background: none;
+        border: none;
+        color: #8ab4f8;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 50%;
+        transition: background 0.2s;
+    }
+
+    .send-btn:hover {
+        background-color: #282a2c;
+    }
+
+    @media screen and (max-width: 768px) {
+        .sidebar {
+            transform: translateX(-100%);
+        }
+        .sidebar.active {
+            transform: translateX(0);
+        }
+        .main-chat {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+        .menu-toggle-btn {
+            display: block;
+        }
+    }
+</style>
