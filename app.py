@@ -247,7 +247,7 @@ def send_chat():
 
         # Gọi mô hình Gemini 2.5 Flash mới nhất kèm theo toàn bộ lịch sử trò chuyện và System Prompt
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=contents_history,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
