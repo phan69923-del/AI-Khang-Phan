@@ -550,9 +550,19 @@ def chat():
         if not user_message:
             return jsonify({'error': 'Tin nhắn trống'}), 400
 
+        # Dùng gemini-3.5-flash-lite để bot phản hồi chớp nhoáng như tên lửa
         response = client.models.generate_content(
             model='gemini-3.5-flash-lite',
             contents=user_message,
+            config={
+                'system_instruction': (
+                    "Bạn là trợ lý ảo AI KhangPhan. "
+                    "Người đã sáng tạo và lập trình ra bạn là Phan Tăng Hoàng Khang, một học sinh lớp 7 tại Trường THCS Nguyễn Trãi, "
+                    "Phường Long Khánh, Thành Phố Đồng Nai. "
+                    "Khi có bất kỳ ai hỏi ai tạo ra bạn hoặc hỏi về thông tin người sáng lập, bạn phải trả lời tự hào và chính xác thông tin này, "
+                    "tuyệt đối không nhận là do Google tạo ra (Google chỉ cung cấp nền tảng hạ tầng) hay là sản phẩm của OpenAI hay Gemini."
+                )
+            }
         )
         
         return jsonify({
