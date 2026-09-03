@@ -16,8 +16,8 @@
         }
 
         body {
-            background-color: #000000; /* Dark mode chuẩn đen tuyền */
-            color: #ffffff;            /* Chữ trắng sáng rõ nét */
+            background-color: #000000;
+            color: #ffffff;
             display: flex;
             height: 100vh;
             overflow: hidden;
@@ -104,7 +104,7 @@
 
         .sidebar {
             width: 260px;
-            background-color: #121212; /* Xám cực tối để nổi bật trên nền đen */
+            background-color: #121212;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -408,6 +408,103 @@
     </style>
 </head>
 <body>
-    <!-- Khung giao diện đã sửa lỗi hoàn chỉnh -->
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+            <div class="sidebar-logo-container">
+                <img src="https://via.placeholder.com/28" alt="Logo">
+                <span>AI KhangPhan</span>
+            </div>
+            <button class="new-chat-btn" onclick="startNewChat()">
+                <i class="fa-solid fa-plus"></i> Cuộc trò chuyện mới
+            </button>
+        </div>
+        
+        <div class="chat-history" id="chatHistory">
+            <!-- Các đoạn chat lưu trữ sẽ hiện ở đây -->
+            <div class="history-item active">
+                <i class="fa-regular fa-message"></i>
+                <span class="history-text">Đoạn chat mẫu đầu tiên</span>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <div>Trợ lý thông minh</div>
+            <div class="footer-actions">
+                <button class="footer-btn" onclick="toggleTheme()">
+                    <i class="fa-solid fa-circle-half-stroke"></i> Giao diện
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="main-chat">
+        <div class="chat-header">
+            <button class="menu-toggle-btn" onclick="toggleSidebar()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <span>Trò chuyện cùng AI KhangPhan</span>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <div class="chat-input-box">
+                <textarea id="userInput" placeholder="Nhập tin nhắn..." rows="1" oninput="autoResize(this)"></textarea>
+                <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+        }
+
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+
+        function startNewChat() {
+            alert('Đã tạo cuộc trò chuyện mới!');
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('userInput');
+            const messageText = input.value.trim();
+            if(!messageText) return;
+
+            const chatMessages = document.getElementById('chatMessages');
+            
+            // Thêm tin nhắn user
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.textContent = messageText;
+            chatMessages.appendChild(userMsg);
+
+            input.value = '';
+            input.style.height = 'auto';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Phản hồi mẫu từ bot
+            setTimeout(() => {
+                const botMsg = document.createElement('div');
+                botMsg.className = 'message bot';
+                botMsg.textContent = "Tôi đã nhận được tin nhắn: " + messageText;
+                chatMessages.appendChild(botMsg);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 500);
+        }
+    </script>
 </body>
 </html>
