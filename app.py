@@ -195,12 +195,28 @@ def single_chat(chat_id):
         return jsonify({'success': True})
 
 # --- ROUTE XỬ LÝ CHAT VỚI AI GEMINI 2.5 FLASH ---
-if not user_msg or not chat_id:
-        return jsonify({'response': 'Thiếu nội dung hoặc mã đoạn chat!'}), 400
+@app.route('/chat', methods=['POST'])
+def send_chat():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    data = request.get_json()
+    user_msg = data.get('message', '').strip()
+    chat_id = data.get('chat_id')
+    
+    if not user_msg:
+        return jsonify({'response': 'Thiếu nội dung tin nhắn!'}), 400
 
-    chat_obj = Chat.query.filter_by(id=chat_id, user_id=session['user_id']).first()
+    # Nếu không có chat_id hoặc chat_id không tồn tại, tự động tạo mới
+    chat_obj = None
+    if chat_id:
+        chat_obj = Chat.query.filter_by(id=chat_id, user_id=session['user_id']).first()
+    
     if not chat_obj:
-        return jsonify({'response': 'Không tìm thấy đoạn chat!'}), 404
+        chat_obj = Chat(user_id=session['user_id'], title=user_msg[:30])
+        db.session.add(chat_obj)
+        db.session.commit()
+        chat_id = chat_obj.id
 
     try:
         old_messages = Message.query.filter_by(chat_id=chat_id).all()
