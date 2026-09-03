@@ -404,7 +404,7 @@
             <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
                 <i id="toggleIcon" class="fa-solid fa-bars"></i>
             </button>
-            <span>Trò chuyện cùng AI KhangPhan</span>
+            <span>AI KhangPhan</span>
         </div>
 
         <div class="chat-messages" id="chatMessages">
@@ -415,7 +415,7 @@
 
         <div class="chat-input-container">
             <div class="chat-input-box">
-                <textarea id="userInput" placeholder="Nhập tin nhắn..." rows="1" oninput="autoResize(this)" onkeydown="checkEnter(event)"></textarea>
+                <textarea id="userInput" placeholder="Hỏi AI Khang Phan..." rows="1" oninput="autoResize(this)" onkeydown="checkEnter(event)"></textarea>
                 <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
@@ -488,7 +488,7 @@
 
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
-            botMsg.textContent = "Đang suy nghĩ...";
+            botMsg.textContent = "Đang suy nghĩ...⟳";
             chatMessages.appendChild(botMsg);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
