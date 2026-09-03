@@ -21,77 +21,13 @@
             display: flex;
             height: 100vh;
             overflow: hidden;
-            transition: background 0.3s, color 0.3s;
         }
 
-        /* Light Mode Styles */
-        body.light-mode {
-            background-color: #ffffff;
-            color: #1f1f1f;
-        }
-        body.light-mode .sidebar {
-            background-color: #f0f4f9;
-            border-right: 1px solid #e0e0e0;
-        }
-        body.light-mode .sidebar-logo-container span,
-        body.light-mode .new-chat-btn,
-        body.light-mode .chat-header,
-        body.light-mode .menu-toggle-btn {
-            color: #1f1f1f;
-        }
-        body.light-mode .new-chat-btn {
-            background-color: #e2e7eb;
-        }
-        body.light-mode .new-chat-btn:hover {
-            background-color: #d3dbdf;
-        }
-        body.light-mode .history-item {
-            color: #444746;
-        }
-        body.light-mode .history-item:hover,
-        body.light-mode .history-item.active {
-            background-color: #e2e7eb;
-        }
-        body.light-mode .sidebar-footer {
-            border-top: 1px solid #e0e0e0;
-            color: #5f6368;
-        }
-        body.light-mode .footer-btn {
-            background-color: #e2e7eb;
-            color: #1f1f1f;
-        }
-        body.light-mode .footer-btn:hover {
-            background-color: #d3dbdf;
-        }
-        body.light-mode .message.user {
-            background-color: #f0f4f9;
-            color: #1f1f1f;
-        }
-        body.light-mode .message.bot {
-            background-color: #ffffff;
-            color: #1f1f1f;
-            border: 1px solid #e0e0e0;
-        }
-        body.light-mode .chat-input-container {
-            background-color: #ffffff;
-        }
-        body.light-mode .chat-input-box {
-            background-color: #f0f4f9;
-            border: 1px solid #c4c7c5;
-        }
-        body.light-mode .chat-input-box textarea {
-            color: #1f1f1f;
-        }
-        body.light-mode .send-btn {
-            color: #0b57d0;
-        }
-        body.light-mode .send-btn:hover {
-            background-color: #e2e7eb;
-        }
-
+        /* Sidebar đồng bộ hoàn toàn tông tối */
         .sidebar {
             width: 260px;
             background-color: #1e1f20;
+            border-right: 1px solid #2b2c2d;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -100,7 +36,6 @@
             left: 0;
             top: 0;
             z-index: 1000;
-            transition: transform 0.3s ease, background-color 0.3s;
         }
 
         .sidebar-top {
@@ -213,6 +148,7 @@
             background-color: #38393a;
         }
 
+        /* Main Chat Area */
         .main-chat {
             margin-left: 260px;
             width: calc(100% - 260px);
@@ -220,26 +156,14 @@
             flex-direction: column;
             height: 100vh;
             background-color: #131314;
-            transition: margin 0.3s ease, width 0.3s ease, background-color 0.3s;
         }
 
         .chat-header {
             padding: 16px 24px;
-            font-size: 18px;
-            font-weight: 600;
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .menu-toggle-btn {
-            background: none;
-            border: none;
-            color: #ffffff;
-            font-size: 20px;
-            cursor: pointer;
-            display: none;
+            font-size: 16px;
+            font-weight: 500;
+            color: #c4c7c5;
+            border-bottom: 1px solid #2b2c2d;
         }
 
         .chat-messages {
@@ -255,16 +179,16 @@
         }
 
         .message {
-            max-width: 75%;
+            max-width: 80%;
             line-height: 1.6;
             font-size: 15px;
-            padding: 12px 16px;
-            border-radius: 12px;
+            padding: 12px 18px;
+            border-radius: 16px;
             word-wrap: break-word;
             white-space: pre-wrap;
         }
 
-        /* Căn chỉnh tin nhắn User nằm bên phải khung chat */
+        /* Tin nhắn User căn phải gọn gàng */
         .message.user {
             background-color: #2b2c2d;
             align-self: flex-end;
@@ -272,7 +196,7 @@
             border-bottom-right-radius: 4px;
         }
 
-        /* Căn chỉnh tin nhắn Bot nằm bên trái */
+        /* Tin nhắn Bot căn trái sang trọng */
         .message.bot {
             background-color: #1e1f20;
             align-self: flex-start;
@@ -323,25 +247,10 @@
         .send-btn:hover {
             background-color: #2b2c2d;
         }
-
-        @media screen and (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            .sidebar.active {
-                transform: translateX(0);
-            }
-            .main-chat {
-                margin-left: 0 !important;
-                width: 100% !important;
-            }
-            .menu-toggle-btn {
-                display: block;
-            }
-        }
     </style>
 </head>
 <body>
+    <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-top">
             <div class="sidebar-logo-container">
@@ -362,20 +271,13 @@
 
         <div class="sidebar-footer">
             <div>Trợ lý thông minh</div>
-            <div class="footer-actions">
-                <button class="footer-btn" onclick="toggleTheme()">
-                    <i class="fa-solid fa-circle-half-stroke"></i> Giao diện
-                </button>
-            </div>
         </div>
     </div>
 
+    <!-- Main Chat Area -->
     <div class="main-chat">
         <div class="chat-header">
-            <button class="menu-toggle-btn" onclick="toggleSidebar()">
-                <i class="fa-solid fa-bars"></i>
-            </button>
-            <span>Trò chuyện cùng AI KhangPhan</span>
+            Trò chuyện cùng AI KhangPhan
         </div>
 
         <div class="chat-messages" id="chatMessages">
@@ -393,14 +295,6 @@
     </div>
 
     <script>
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('active');
-        }
-
-        function toggleTheme() {
-            document.body.classList.toggle('light-mode');
-        }
-
         function autoResize(textarea) {
             textarea.style.height = 'auto';
             textarea.style.height = textarea.scrollHeight + 'px';
@@ -426,7 +320,6 @@
 
             const chatMessages = document.getElementById('chatMessages');
             
-            // 1. Hiển thị tin nhắn người dùng căn phải chuẩn xác
             const userMsg = document.createElement('div');
             userMsg.className = 'message user';
             userMsg.textContent = messageText;
@@ -436,15 +329,14 @@
             input.style.height = 'auto';
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            // 2. Hiển thị trạng thái đang trả lời từ AI
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
-            botMsg.textContent = "AI đang suy nghĩ...";
+            botMsg.textContent = "Đang suy nghĩ...";
             chatMessages.appendChild(botMsg);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
-                // Thay thế YOUR_API_KEY bằng API Key thật của bạn
+                // Thay đoạn YOUR_API_KEY bằng khóa API thật của bạn ở đây
                 const apiKey = "AQ.Ab8RN6JqddtKtTc0ZNlwnRlZzOZK719BjqCFdAwW2AgBBAyEsw"; 
                 
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
@@ -458,13 +350,12 @@
                 const data = await response.json();
                 
                 if (data.candidates && data.candidates.length > 0) {
-                    const replyText = data.candidates[0].content.parts[0].text;
-                    botMsg.textContent = replyText;
+                    botMsg.textContent = data.candidates[0].content.parts[0].text;
                 } else {
                     botMsg.textContent = "Xin lỗi, tôi không nhận được phản hồi từ hệ thống.";
                 }
             } catch (error) {
-                botMsg.textContent = "Lỗi kết nối! Vui lòng kiểm tra lại API Key hoặc mạng của bạn.";
+                botMsg.textContent = "Lỗi kết nối mạng!";
             }
             
             chatMessages.scrollTop = chatMessages.scrollHeight;
