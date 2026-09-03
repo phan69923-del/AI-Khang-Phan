@@ -1,3 +1,14 @@
+import os
+from flask import Flask, render_template_string, request, jsonify
+from google import genai
+
+app = Flask(__name__)
+
+# Khởi tạo client Gemini mới nhất
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+# Toàn bộ giao diện HTML/CSS/JS của Đại vương được nhúng trực tiếp vào đây
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -24,7 +35,6 @@
             transition: background 0.3s, color 0.3s;
         }
 
-        /* Chế độ Sáng (Light Mode) */
         body.light-mode {
             background-color: #ffffff;
             color: #1f1f1f;
@@ -92,7 +102,6 @@
             color: #1f1f1f;
         }
 
-        /* Sidebar với hiệu ứng trượt mượt mà và an toàn cho mobile */
         .sidebar {
             width: 260px;
             background-color: #1e1f20;
@@ -223,7 +232,6 @@
             background-color: #38393a;
         }
 
-        /* Main Chat Area với hiệu ứng co giãn đều */
         .main-chat {
             margin-left: 260px;
             width: calc(100% - 260px);
@@ -250,7 +258,6 @@
             gap: 12px;
         }
 
-        /* Nút toggle mở/đóng sidebar dùng font icon */
         .sidebar-toggle-btn {
             background: none;
             border: none;
@@ -349,7 +356,6 @@
             background-color: #2b2c2d;
         }
 
-        /* Responsive cho điện thoại (Màn hình nhỏ hơn 768px) */
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -366,7 +372,6 @@
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-top">
             <div class="sidebar-logo-container">
@@ -398,7 +403,6 @@
         </div>
     </div>
 
-    <!-- Main Chat Area -->
     <div class="main-chat" id="mainChat">
         <div class="chat-header">
             <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
@@ -424,7 +428,6 @@
     <script>
         let currentChatId = 1;
 
-        // Hàm hiệu ứng đóng mở Sidebar linh hoạt cho cả PC và Mobile
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const mainChat = document.getElementById('mainChat');
@@ -492,7 +495,6 @@
             chatMessages.appendChild(botMsg);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            // Cơ chế thử lại tự động ở phía Client nếu gặp lỗi mạng hoặc 503
             let retries = 3;
             let success = false;
 
@@ -518,7 +520,7 @@
                         botMsg.textContent = "Hệ thống đang quá tải tạm thời (Lỗi 503). Vui lòng thử lại sau ít phút!";
                     } else {
                         botMsg.textContent = `Đang thử kết nối lại lần thứ ${4 - retries}...`;
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Đợi 2 giây rồi thử lại
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                     }
                 }
             }
@@ -528,3 +530,38 @@
     </script>
 </body>
 </html>
+"""
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/logout')
+def logout():
+    return jsonify({"message": "Đã đăng xuất thành công"}), 200
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        chat_id = data.get('chat_id')
+        
+        if not user_message:
+            return jsonify({'error': 'Tin nhắn trống'}), 400
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=user_message,
+        )
+        
+        return jsonify({
+            'response': response.text,
+            'chat_id': chat_id
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 503
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
