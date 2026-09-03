@@ -340,6 +340,7 @@
     </style>
 </head>
 <body>
+    <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-top">
             <div class="sidebar-logo-container">
@@ -368,6 +369,7 @@
         </div>
     </div>
 
+    <!-- Main Chat Area -->
     <div class="main-chat">
         <div class="chat-header">
             <button class="menu-toggle-btn" onclick="toggleSidebar()">
@@ -424,7 +426,7 @@
 
             const chatMessages = document.getElementById('chatMessages');
             
-            // 1. Hiển thị tin nhắn của người dùng
+            // 1. Hiển thị tin nhắn người dùng (có class .message.user để dạt phải)
             const userMsg = document.createElement('div');
             userMsg.className = 'message user';
             userMsg.textContent = messageText;
@@ -434,7 +436,7 @@
             input.style.height = 'auto';
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            // 2. Tạo khung tin nhắn chờ phản hồi từ AI
+            // 2. Hiển thị trạng thái đang xử lý
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
             botMsg.textContent = "Đang suy nghĩ...";
