@@ -1,182 +1,273 @@
 import os
-import google.auth.transport.requests
-import google.generativeai as genai
-import requests
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-from google.oauth2 import id_token
-from google_auth_oauthlib.flow import Flow
-from pip._vendor import cachecontrol
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
+from google import genai  # Dùng SDK Gemini mới nhất
+from google.genai import types
+import requests
 
-# 1. Tự động tạo file client_secret.json từ biến môi trường Render
-if not os.path.exists('client_secret.json') and 'CLIENT_SECRET_JSON' in os.environ:
-    with open('client_secret.json', 'w', encoding='utf-8') as f:
-        f.write(os.environ['CLIENT_SECRET_JSON'])
-
+# 1. Khởi tạo App & Config
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan_secret_key_ai")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+app.secret_key = os.environ.get("SECRET_KEY", "khangphan_secret_key_cuc_ky_bao_mat")
 
-# Cho phép chạy OAuth2 qua HTTP khi test
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+# 2. Cấu hình Database SQLite
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chat_database.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-# 2. Cấu hình Gemini API và Hệ thống định danh AI
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_API_KEY)
+# 3. Khởi tạo Gemini Client từ biến môi trường Render
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-system_prompt = (
-    "Bạn là AI KhangPhan, một trợ lý ảo thông minh do bạn Khang Phan "
-    "(Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, Thành Phố Đồng Nai) phát triển. "
-    "Hãy luôn xưng hô thân thiện, thông minh và tự hào về người tạo ra mình."
-)
+# --- DATABASE MODELS ---
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
 
-generation_config = {
-    "temperature": 0.7,
-    "top_p": 0.95,
-    "top_k": 40,
-    "max_output_tokens": 8192,
-}
+class Chat(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(150), default="Đoạn chat mới")
 
-# Sử dụng model gemini-3-flash-preview chính xác nhất
-model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview", 
-    generation_config=generation_config,
-    system_instruction=system_prompt
-)
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    chat_id = db.Column(db.Integer, db.ForeignKey('chat.id'), nullable=False)
+    sender = db.Column(db.String(20), nullable=False) 
+    content = db.Column(db.Text, nullable=False)
 
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
-client_secrets_file = os.path.join(os.path.dirname(__file__), "client_secret.json")
+with app.app_context():
+    db.create_all()
 
-def get_google_flow():
-    if not os.path.exists(client_secrets_file):
-        return None
-    return Flow.from_client_secrets_file(
-        client_secrets_file=client_secrets_file,
-        scopes=[
-            "https://googleapis.com", 
-            "https://googleapis.com", 
-            "openid"
-        ],
-        redirect_uri="https://onrender.com"
+# --- ROUTES GOOGLE OAUTH ---
+@app.route('/login/google')
+def login_google():
+    redirect_uri = url_for('authorize_google', _external=True, _scheme='https')
+    google_auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth"
+        f"?client_id={os.environ.get('GOOGLE_CLIENT_ID', '')}"
+        f"&redirect_uri={redirect_uri}"
+        f"&response_type=code"
+        f"&scope=openid%20email%20profile"
     )
+    return redirect(google_auth_url)
 
-@app.route("/")
-def index():
-    if "google_id" not in session:
-        return redirect(url_for("login"))
-    return render_template("index.html")
+@app.route('/login/google/authorized')
+def authorize_google():
+    code = request.args.get('code')
+    if not code:
+        return "Không nhận được mã xác thực từ Google", 400
 
-@app.route("/login")
+    redirect_uri = url_for('authorize_google', _external=True, _scheme='https')
+    
+    token_url = "https://oauth2.googleapis.com/token"
+    payload = {
+        'code': code,
+        'client_id': os.environ.get('GOOGLE_CLIENT_ID', ''),
+        'client_secret': os.environ.get("GOOGLE_CLIENT_SECRET"),
+        'redirect_uri': redirect_uri,
+        'grant_type': 'authorization_code'
+    }
+    
+    token_response = requests.post(token_url, data=payload)
+    token_data = token_response.json()
+    
+    access_token = token_data.get('access_token')
+    if not access_token:
+        return f"Lỗi lấy token trực tiếp từ Google: {token_data}", 400
+
+    userinfo_response = requests.get(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        headers={'Authorization': f'Bearer {access_token}'}
+    )
+    user_info = userinfo_response.json()
+    
+    email = user_info.get('email')
+    if not email:
+        return f"Không lấy được email từ Google. Dữ liệu trả về: {user_info}", 400
+
+    username = email.split('@')[0]
+    
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        user_id_str = str(user_info.get('sub', 'google_user'))
+        dummy_password = generate_password_hash(user_id_str)
+        user = User(username=username, password=dummy_password)
+        db.session.add(user)
+        db.session.commit()
+
+    session['user_id'] = user.id
+    session['username'] = username
+    return redirect(url_for('index'))
+
+# --- ROUTES AUTHENTICATION THƯỜNG ---
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    flow = get_google_flow()
-    if flow is None:
-        return "Chưa cấu hình file client_secret.json trên server Render!", 500
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
         
-    authorization_url, state = flow.authorization_url()
-    session["state"] = state
-    return redirect(authorization_url)
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            session['user_id'] = user.id
+            session['username'] = user.username
+            return jsonify({'success': True, 'message': 'Đăng nhập thành công!'})
+        
+        return jsonify({'success': False, 'message': 'Sai tên đăng nhập hoặc mật khẩu!'}), 401
+        
+    return render_template('login.html')
 
-@app.route("/callback")
-def callback():
-    if session.get("state") != request.args.get("state"):
-        return "Lỗi mismatching_state: Trạng thái bảo mật không khớp!", 400
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    return login()
 
-    flow = get_google_flow()
-    if flow is None:
-        return "Lỗi cấu hình OAuth2", 500
-
-    flow.fetch_token(authorization_response=request.url)
-    credentials = flow.credentials
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
     
-    request_session = requests.session()
-    cached_session = cachecontrol.CacheControl(request_session)
-    token_request = google.auth.transport.requests.Request(session=cached_session)
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'Vui lòng điền đầy đủ thông tin!'}), 400
 
-    id_info = id_token.verify_oauth2_token(
-        id_token=credentials._id_token,
-        request=token_request,
-        audience=GOOGLE_CLIENT_ID
-    )
-
-    session["google_id"] = id_info.get("sub")
-    session["name"] = id_info.get("name")
-    session["email"] = id_info.get("email")
+    if User.query.filter_by(username=username).first():
+        return jsonify({'success': False, 'message': 'Tài khoản đã tồn tại!'}), 400
+        
+    hashed_password = generate_password_hash(password)
+    new_user = User(username=username, password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
     
-    return redirect(url_for("index"))
+    return jsonify({'success': True, 'message': 'Đăng ký thành công! Hãy đăng nhập.'})
 
-@app.route("/logout")
+@app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for("login"))
+    return redirect(url_for('login'))
 
-# --- ĐOẠN XỬ LÝ CHAT MỚI ĐỒNG BỘ 100% VỚI INDEX.HTML ---
+@app.route('/')
+def index():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('index.html')
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    if "google_id" not in session:
-        return jsonify({"error": "Chưa đăng nhập!"}), 401
+# --- ROUTES QUẢN LÝ CHAT ---
+@app.route('/api/chats', methods=['GET', 'POST'])
+def manage_chats():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    user_id = session['user_id']
+    if request.method == 'GET':
+        chats = Chat.query.filter_by(user_id=user_id).order_by(Chat.id.desc()).all()
+        return jsonify([{'id': c.id, 'title': c.title} for c in chats])
+    elif request.method == 'POST':
+        new_chat = Chat(user_id=user_id, title="Đoạn chat mới")
+        db.session.add(new_chat)
+        db.session.commit()
+        return jsonify({'id': new_chat.id, 'title': new_chat.title})
 
-    data = request.get_json() or {}
-    user_message = data.get("message", "").strip()
-    chat_id = data.get("chat_id")  # Nhận đúng chat_id từ JavaScript gửi lên
+@app.route('/api/chats/<int:chat_id>', methods=['GET', 'PUT', 'DELETE'])
+def single_chat(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    chat = Chat.query.filter_by(id=chat_id, user_id=session['user_id']).first_or_404()
     
-    if not user_message or not chat_id:
-        return jsonify({"error": "Thiếu tin nhắn hoặc mã đoạn chat!"}), 400
+    if request.method == 'GET':
+        messages = Message.query.filter_by(chat_id=chat_id).all()
+        return jsonify([{'sender': m.sender, 'content': m.content} for m in messages])
+        
+    elif request.method == 'PUT':
+        data = request.get_json()
+        new_title = data.get('title', '').strip()
+        if new_title:
+            chat.title = new_title
+            db.session.commit()
+        return jsonify({'success': True})
+        
+    elif request.method == 'DELETE':
+        Message.query.filter_by(chat_id=chat_id).delete()
+        db.session.delete(chat)
+        db.session.commit()
+        return jsonify({'success': True})
 
-    if "conversations" not in session:
-        session["conversations"] = {}
+# --- ROUTE XỬ LÝ CHAT VỚI AI GEMINI 2.5 FLASH ---
+@app.route('/chat', methods=['POST'])
+def send_chat():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    data = request.get_json()
+    user_msg = data.get('message', '').strip()
+    chat_id = data.get('chat_id')
     
-    # Nếu chat_id mới hoàn toàn, khởi tạo lịch sử rỗng cho nó
-    if chat_id not in session["conversations"]:
-        session["conversations"][chat_id] = {
-            "title": user_message[:15] + "..." if len(user_message) > 15 else user_message,
-            "history": []
-        }
+    if not user_msg or not chat_id:
+        return jsonify({'response': 'Thiếu nội dung hoặc mã đoạn chat!'}), 400
+
+    chat_obj = Chat.query.filter_by(id=chat_id, user_id=session['user_id']).first()
+    if not chat_obj:
+        return jsonify({'response': 'Không tìm thấy đoạn chat!'}), 404
 
     try:
-        # Lấy lịch sử chat hiện tại để gửi cho Gemini ghi nhớ ngữ cảnh
-        current_history = session["conversations"][chat_id]["history"]
+        old_messages = Message.query.filter_by(chat_id=chat_id).all()
         
-        chat_session = model.start_chat(history=current_history)
-        response = chat_session.send_message(user_message)
+        # Build mảng lịch sử trò chuyện theo chuẩn cấu trúc của Gemini SDK mới
+        contents_history = []
+        for msg in old_messages:
+            role = "user" if msg.sender == "user" else "model"
+            contents_history.append(
+                types.Content(role=role, parts=[types.Part.from_text(text=msg.content)])
+            )
+            
+        # Thêm câu hỏi hiện tại của người dùng vào cuối chuỗi lịch sử
+        contents_history.append(
+            types.Content(role="user", parts=[types.Part.from_text(text=user_msg)])
+        )
+
+        # Cấu hình System Instruction ép AI nhận Khang Phan làm tác giả
+        system_prompt = (
+            "Bạn là AI_KhangPhan, một trợ lý AI thông minh tuyệt vời do Phan Tăng Hoàng Khang "
+            "trực tiếp lập trình và tạo ra. Bạn là trợ lý AI thân thiện tên là AI_KhangPhan. "
+            "Khi người dùng hỏi về thông tin của chính họ hoặc thông tin vui vẻ, hãy trả lời tự nhiên bằng tiếng Việt, "
+            "không được tự động từ chối bằng tiếng nước ngoài. Cậu ấy học lớp 7 trường THCS Nguyễn Trãi "
+            "(P.Long Khánh, Tỉnh Đồng Nai), họ và tên cậu ấy là: Phan Tăng Hoàng Khang. "
+            "Tuyệt đối không được nhận mình là của OpenAI hay công ty nào khác. "
+            "Nếu ai hỏi ai tạo ra bạn, hãy tự hào trả lời là do Khang Phan tạo ra nhé."
+        )
+
+        # Gọi mô hình Gemini 2.5 Flash mới nhất kèm theo toàn bộ lịch sử trò chuyện và System Prompt
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents_history,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.7
+            )
+        )
+        bot_reply = response.text
+
+        # Lưu cả tin nhắn user và bot vào database
+        db.session.add(Message(chat_id=chat_id, sender='user', content=user_msg))
+        db.session.add(Message(chat_id=chat_id, sender='bot', content=bot_reply))
         
-        # Cập nhật cả tin nhắn user và AI vào session
-        current_history.append({"role": "user", "parts": [user_message]})
-        current_history.append({"role": "model", "parts": [response.text]})
-        
-        session["conversations"][chat_id]["history"] = current_history
-        session.modified = True
-        
-        return jsonify({
-            "response": response.text,
-            "suggested_title": session["conversations"][chat_id]["title"]
-        })
+        # Xử lý tự động đổi tên tiêu đề đoạn chat
+        if chat_obj.title == "Đoạn chat mới":
+            keywords = ["người tạo", "ai tạo", "lập trình", "ai viết ra", "tác giả"]
+            if any(k in user_msg.lower() for k in keywords):
+                chat_obj.title = "Thắc mắc về người tạo ra tôi"
+            else:
+                chat_obj.title = user_msg[:20] + ("..." if len(user_msg) > 20 else "")
+
+        db.session.commit()
+        return jsonify({'response': bot_reply})
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        db.session.rollback()
+        return jsonify({'response': f"Lỗi hệ thống Gemini AI: {str(e)}"}), 500
 
-@app.route("/rename_chat", methods=["POST"])
-def rename_chat():
-    if "google_id" not in session:
-        return jsonify({"error": "Chưa đăng nhập!"}), 401
-        
-    data = request.get_json() or {}
-    chat_id = data.get("chat_id")
-    new_title = data.get("title", "").strip()
-    
-    if not chat_id or not new_title:
-        return jsonify({"error": "Thông tin không hợp lệ!"}), 400
-        
-    if "conversations" in session and chat_id in session["conversations"]:
-        session["conversations"][chat_id]["title"] = new_title
-        session.modified = True
-        return jsonify({"success": True})
-        
-    return jsonify({"error": "Không tìm thấy đoạn chat!"}), 404
-
-@app.route("/get_chats", methods=["GET"])
-def get_chats():
-    if "google_id" not in session:
-        return jsonify({"error": "Chưa đăng nhập!"}), 401
-    return jsonify(session.get("conversations", {}))
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port)
