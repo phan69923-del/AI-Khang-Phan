@@ -5,7 +5,7 @@ from google import genai
 app = Flask(__name__)
 
 # Khởi tạo client Gemini mới nhất
-client = genai.Client(api_key=os.environ.get("AQ.Ab8RN6JqddtKtTc0ZNlwnRlZzOZK719BjqCFdAwW2AgBBAyEsw"))
+client = genai.Client(api_key="AQ.Ab8RN6JqddtKtTc0ZNlwnRlZzOZK719BjqCFdAwW2AgBBAyEsw")
 
 # Toàn bộ giao diện HTML/CSS/JS của Đại vương được nhúng trực tiếp vào đây
 HTML_TEMPLATE = """
