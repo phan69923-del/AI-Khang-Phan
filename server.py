@@ -45,8 +45,8 @@ with app.app_context():
 def login_google():
     redirect_uri = url_for('authorize_google', _external=True, _scheme='https')
     google_auth_url = (
-        f"https://google.com"
-        f"?client_id=://googleusercontent.com"
+        f"https://accounts.google.com/o/oauth2/v2/auth"
+        f"?client_id={os.environ.get('GOOGLE_CLIENT_ID', '')}"
         f"&redirect_uri={redirect_uri}"
         f"&response_type=code"
         f"&scope=openid%20email%20profile"
@@ -61,10 +61,10 @@ def authorize_google():
 
     redirect_uri = url_for('authorize_google', _external=True, _scheme='https')
     
-    token_url = "https://googleapis.com"
+    token_url = "https://oauth2.googleapis.com/token"
     payload = {
         'code': code,
-        'client_id': '://googleusercontent.com',
+        'client_id': os.environ.get('GOOGLE_CLIENT_ID', ''),
         'client_secret': os.environ.get("GOOGLE_CLIENT_SECRET"),
         'redirect_uri': redirect_uri,
         'grant_type': 'authorization_code'
@@ -78,7 +78,7 @@ def authorize_google():
         return f"Lỗi lấy token trực tiếp từ Google: {token_data}", 400
 
     userinfo_response = requests.get(
-        'https://googleapis.com',
+        'https://www.googleapis.com/oauth2/v3/userinfo',
         headers={'Authorization': f'Bearer {access_token}'}
     )
     user_info = userinfo_response.json()
@@ -91,7 +91,7 @@ def authorize_google():
     
     user = User.query.filter_by(username=username).first()
     if not user:
-        user_id_str = str(user_info.get('id', 'google_user'))
+        user_id_str = str(user_info.get('sub', 'google_user'))
         dummy_password = generate_password_hash(user_id_str)
         user = User(username=username, password=dummy_password)
         db.session.add(user)
@@ -194,7 +194,7 @@ def single_chat(chat_id):
         db.session.commit()
         return jsonify({'success': True})
 
-# --- ROUTE XỬ LÝ CHAT VỚI AI GEMINI 2.5 FLASH (CẬP NHẬT ĐẦY ĐỦ) ---
+# --- ROUTE XỬ LÝ CHAT VỚI AI GEMINI 2.5 FLASH ---
 @app.route('/chat', methods=['POST'])
 def send_chat():
     if 'user_id' not in session:
@@ -217,7 +217,6 @@ def send_chat():
         # Build mảng lịch sử trò chuyện theo chuẩn cấu trúc của Gemini SDK mới
         contents_history = []
         for msg in old_messages:
-            # Chuyển đổi role cho đúng format: 'user' hoặc 'model'
             role = "user" if msg.sender == "user" else "model"
             contents_history.append(
                 types.Content(role=role, parts=[types.Part.from_text(text=msg.content)])
@@ -257,16 +256,18 @@ def send_chat():
         # Xử lý tự động đổi tên tiêu đề đoạn chat
         if chat_obj.title == "Đoạn chat mới":
             keywords = ["người tạo", "ai tạo", "lập trình", "ai viết ra", "tác giả"]
-if any(k in user_msg.lower() for k in keywords):
-    chat_obj.title = "Thắc mắc về người tạo ra tôi"else:
-    chat_obj.title = user_msg[:20] + ("..." if len(user_msg) > 20 else "")
+            if any(k in user_msg.lower() for k in keywords):
+                chat_obj.title = "Thắc mắc về người tạo ra tôi"
+            else:
+                chat_obj.title = user_msg[:20] + ("..." if len(user_msg) > 20 else "")
 
-db.session.commit()
-return jsonify({'response': bot_reply})
+        db.session.commit()
+        return jsonify({'response': bot_reply})
 
-except Exception as e:
-db.session.rollback()
-return jsonify({'response': f"Lỗi hệ thống Gemini AI: {str(e)}"}), 500
-if name == 'main':
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'response': f"Lỗi hệ thống Gemini AI: {str(e)}"}), 500
+
+if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
