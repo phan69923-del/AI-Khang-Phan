@@ -2,12 +2,19 @@ import os
 from flask import Flask, render_template_string, request, jsonify
 from google import genai
 
+# Import module bộ nhớ riêng vừa tạo
+import khangphan_memory
+
 app = Flask(__name__)
 
-# Khởi tạo client Gemini mới nhất
-client = genai.Client(api_key="AQ.Ab8RN6JFr39azaDgMOHlbJjXYFqqXTolsMgsTpJFjrk7CVixLA")
+# Khởi tạo client Gemini
+client = genai.Client(api_key="AQ....")
 
-# Toàn bộ giao diện HTML/CSS/JS của Đại vương được nhúng trực tiếp vào đây
+# Load bộ nhớ từ file riêng biệt
+db = khangphan_memory.load_memory_data()
+chat_sessions = db.get("sessions", {})       # Lưu tiêu đề & tin nhắn hiển thị giao diện
+server_histories = db.get("histories", {})   # Lưu bộ nhớ ngữ cảnh để Gemini nhớ dai
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -174,7 +181,7 @@ HTML_TEMPLATE = """
         .history-item {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
             padding: 10px 12px;
             border-radius: 20px;
             font-size: 14px;
@@ -189,11 +196,35 @@ HTML_TEMPLATE = """
             color: #ffffff;
         }
 
+        .history-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            overflow: hidden;
+        }
+
         .history-text {
             flex: 1;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        .delete-chat-btn {
+            background: none;
+            border: none;
+            color: #888888;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 50%;
+            font-size: 12px;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .delete-chat-btn:hover {
+            color: #ff6b6b;
+            background-color: rgba(255, 107, 107, 0.1);
         }
 
         .sidebar-footer {
@@ -384,10 +415,7 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="chat-history" id="chatHistory">
-            <div class="history-item active">
-                <i class="fa-regular fa-message"></i>
-                <span class="history-text">Đoạn chat mẫu đầu tiên</span>
-            </div>
+            <!-- Lịch sử chat đồng bộ từ file nhớ riêng -->
         </div>
 
         <div class="sidebar-footer">
@@ -408,7 +436,7 @@ HTML_TEMPLATE = """
             <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
                 <i id="toggleIcon" class="fa-solid fa-bars"></i>
             </button>
-            <span>AI KhangPhan</span>
+            <span id="chatTitleHeader">AI KhangPhan</span>
         </div>
 
         <div class="chat-messages" id="chatMessages">
@@ -426,7 +454,17 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        let currentChatId = 1;
+        let chatSessions = {{ sessions | tojson | safe }};
+        let currentChatId = "";
+
+        const sessionKeys = Object.keys(chatSessions);
+        if (sessionKeys.length > 0) {
+            currentChatId = sessionKeys[0];
+            loadChatSession(currentChatId);
+        } else {
+            startNewChat(false);
+        }
+        renderHistoryList();
 
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -435,19 +473,11 @@ HTML_TEMPLATE = """
 
             if (window.innerWidth <= 768) {
                 sidebar.classList.toggle('mobile-open');
-                if (sidebar.classList.contains('mobile-open')) {
-                    toggleIcon.className = "fa-solid fa-xmark";
-                } else {
-                    toggleIcon.className = "fa-solid fa-bars";
-                }
+                toggleIcon.className = sidebar.classList.contains('mobile-open') ? "fa-solid fa-xmark" : "fa-solid fa-bars";
             } else {
                 sidebar.classList.toggle('closed');
                 mainChat.classList.toggle('expanded');
-                if (sidebar.classList.contains('closed')) {
-                    toggleIcon.className = "fa-solid fa-arrow-right";
-                } else {
-                    toggleIcon.className = "fa-solid fa-bars";
-                }
+                toggleIcon.className = sidebar.classList.contains('closed') ? "fa-solid fa-arrow-right" : "fa-solid fa-bars";
             }
         }
 
@@ -467,10 +497,87 @@ HTML_TEMPLATE = """
             document.body.classList.toggle('light-mode');
         }
 
-        function startNewChat() {
-            document.getElementById('chatMessages').innerHTML = `
-                <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
-            `;
+        async function startNewChat() {
+            const newId = 'chat_' + Date.now();
+            try {
+                const response = await fetch('/new_chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: newId })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    chatSessions = data.sessions;
+                    loadChatSession(newId);
+                }
+            } catch (e) {
+                console.error("Lỗi tạo chat mới:", e);
+            }
+        }
+
+        function renderHistoryList() {
+            const historyContainer = document.getElementById('chatHistory');
+            historyContainer.innerHTML = '';
+
+            for (let id in chatSessions) {
+                const item = document.createElement('div');
+                item.className = `history-item ${id === currentChatId ? 'active' : ''}`;
+                item.innerHTML = `
+                    <div class="history-content" onclick="loadChatSession('${id}')">
+                        <i class="fa-regular fa-message"></i>
+                        <span class="history-text">${chatSessions[id].title}</span>
+                    </div>
+                    <button class="delete-chat-btn" onclick="deleteChat(event, '${id}')" title="Xóa đoạn chat">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+                historyContainer.appendChild(item);
+            }
+        }
+
+        function loadChatSession(id) {
+            currentChatId = id;
+            if (!chatSessions[id]) return;
+
+            document.getElementById('chatTitleHeader').textContent = chatSessions[id].title;
+            
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+
+            chatSessions[id].messages.forEach(msg => {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = `message ${msg.role}`;
+                msgDiv.textContent = msg.text;
+                chatMessages.appendChild(msgDiv);
+            });
+
+            renderHistoryList();
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function deleteChat(event, id) {
+            event.stopPropagation();
+            if (!confirm("Đại vương có chắc chắn muốn xóa đoạn chat này không?")) return;
+
+            try {
+                const response = await fetch('/delete_chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: id })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    chatSessions = data.sessions;
+                    const keys = Object.keys(chatSessions);
+                    if (keys.length > 0) {
+                        loadChatSession(keys[0]);
+                    } else {
+                        startNewChat();
+                    }
+                }
+            } catch (e) {
+                console.error("Lỗi xóa chat:", e);
+            }
         }
 
         async function sendMessage() {
@@ -484,6 +591,7 @@ HTML_TEMPLATE = """
             userMsg.className = 'message user';
             userMsg.textContent = messageText;
             chatMessages.appendChild(userMsg);
+            chatSessions[currentChatId].messages.push({ role: 'user', text: messageText });
 
             input.value = '';
             input.style.height = 'auto';
@@ -497,6 +605,7 @@ HTML_TEMPLATE = """
 
             let retries = 3;
             let success = false;
+            let finalBotResponse = "";
 
             while (retries > 0 && !success) {
                 try {
@@ -509,22 +618,27 @@ HTML_TEMPLATE = """
                     const data = await response.json();
                     
                     if (response.ok && data.response) {
-                        botMsg.textContent = data.response;
+                        finalBotResponse = data.response;
+                        botMsg.textContent = finalBotResponse;
                         success = true;
+                        chatSessions = data.sessions;
+                        document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
+                        renderHistoryList();
                     } else {
                         throw new Error(data.error || "Server quá tải");
                     }
                 } catch (error) {
                     retries--;
                     if (retries === 0) {
-                        botMsg.textContent = "Hệ thống đang quá tải tạm thời (Lỗi 503). Vui lòng thử lại sau ít phút!";
+                        finalBotResponse = "Hệ thống đang quá tải tạm thời (Lỗi 503). Vui lòng thử lại sau ít phút!";
+                        botMsg.textContent = finalBotResponse;
                     } else {
                         botMsg.textContent = `Đang thử kết nối lại lần thứ ${4 - retries}...`;
                         await new Promise(resolve => setTimeout(resolve, 2000));
                     }
                 }
             }
-            
+
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
     </script>
@@ -534,11 +648,38 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    return render_template_string(HTML_TEMPLATE, sessions=chat_sessions)
 
 @app.route('/logout')
 def logout():
     return jsonify({"message": "Đã đăng xuất thành công"}), 200
+
+@app.route('/new_chat', methods=['POST'])
+def new_chat():
+    data = request.get_json()
+    chat_id = data.get('chat_id')
+    
+    chat_sessions[chat_id] = {
+        "title": "Cuộc trò chuyện mới",
+        "messages": [{"role": "bot", "text": "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?"}]
+    }
+    server_histories[chat_id] = []
+    
+    khangphan_memory.save_memory_data({"sessions": chat_sessions, "histories": server_histories})
+    return jsonify({"sessions": chat_sessions})
+
+@app.route('/delete_chat', methods=['POST'])
+def delete_chat():
+    data = request.get_json()
+    chat_id = data.get('chat_id')
+    
+    if chat_id in chat_sessions:
+        del chat_sessions[chat_id]
+    if chat_id in server_histories:
+        del server_histories[chat_id]
+        
+    khangphan_memory.save_memory_data({"sessions": chat_sessions, "histories": server_histories})
+    return jsonify({"sessions": chat_sessions})
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -550,24 +691,42 @@ def chat():
         if not user_message:
             return jsonify({'error': 'Tin nhắn trống'}), 400
 
-        # Dùng gemini-3.5-flash-lite để bot phản hồi chớp nhoáng như tên lửa
-        response = client.models.generate_content(
+        if chat_id in chat_sessions and chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
+            chat_sessions[chat_id]["title"] = user_message[:25] + ('...' if len(user_message) > 25 else '')
+
+        if chat_id not in server_histories:
+            server_histories[chat_id] = []
+
+        chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
-            contents=user_message,
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
                     "Người đã sáng tạo và lập trình ra bạn là Phan Tăng Hoàng Khang, một học sinh lớp 7 tại Trường THCS Nguyễn Trãi, "
                     "Phường Long Khánh, Thành Phố Đồng Nai. "
                     "Khi có bất kỳ ai hỏi ai tạo ra bạn hoặc hỏi về thông tin người sáng lập, bạn phải trả lời tự hào và chính xác thông tin này, "
-                    "tuyệt đối không nhận là do Google tạo ra (Google chỉ cung cấp nền tảng hạ tầng) hay là sản phẩm của OpenAI hay Gemini."
+                    "tuyệt đối không nhận là do Google tạo ra (Google chỉ cung cấp nền tảng hạ tầng)."
                 )
-            }
+            },
+            history=server_histories[chat_id]
         )
+
+        response = chat_session.send_message(user_message)
+        bot_response = response.text
+
+        server_histories[chat_id].append({"role": "user", "parts": [{"text": user_message}]})
+        server_histories[chat_id].append({"role": "model", "parts": [{"text": bot_response}]})
+
+        if chat_id in chat_sessions:
+            chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
+            chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
+
+        # Gọi file riêng để lưu dữ liệu vĩnh cửu
+        khangphan_memory.save_memory_data({"sessions": chat_sessions, "histories": server_histories})
         
         return jsonify({
-            'response': response.text,
-            'chat_id': chat_id
+            'response': bot_response,
+            'sessions': chat_sessions
         })
 
     except Exception as e:
