@@ -89,10 +89,10 @@
             background-color: #e2e8f0;
         }
         body.light-mode .sidebar-toggle-btn img {
-            filter: none; /* Giữ nguyên màu gốc của icon ở chế độ sáng */
+            filter: none;
         }
 
-        /* Sidebar với hiệu ứng trượt mượt mà */
+        /* Sidebar với hiệu ứng trượt mượt mà và an toàn cho mobile */
         .sidebar {
             width: 260px;
             background-color: #1e1f20;
@@ -106,6 +106,7 @@
             top: 0;
             z-index: 1000;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         .sidebar.closed {
@@ -190,6 +191,7 @@
 
         .sidebar-footer {
             padding: 16px;
+            padding-bottom: calc(16px + env(safe-area-inset-bottom));
             border-top: 1px solid #2b2c2d;
             font-size: 13px;
             color: #aaaaaa;
@@ -268,7 +270,7 @@
         .sidebar-toggle-btn img {
             width: 20px;
             height: 20px;
-            filter: invert(1); /* Mặc định đổi sang màu sáng cho nền tối */
+            filter: invert(1);
         }
 
         .chat-messages {
@@ -310,6 +312,7 @@
 
         .chat-input-container {
             padding: 20px 24px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom));
             background-color: transparent;
         }
 
@@ -350,10 +353,24 @@
         .send-btn:hover {
             background-color: #2b2c2d;
         }
+
+        /* Responsive cho điện thoại (Màn hình nhỏ hơn 768px) */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.mobile-open {
+                transform: translateX(0);
+                box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+            }
+            .main-chat {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+        }
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-top">
             <div class="sidebar-logo-container">
@@ -385,11 +402,10 @@
         </div>
     </div>
 
-    <!-- Main Chat Area -->
     <div class="main-chat" id="mainChat">
         <div class="chat-header">
             <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
-                <img id="toggleIcon" src="/static/icon_dong.png" alt="Toggle Sidebar">
+                <img id="toggleIcon" src="/static/icon_mo.png" alt="Toggle Sidebar">
             </button>
             <span>Trò chuyện cùng AI KhangPhan</span>
         </div>
@@ -411,19 +427,27 @@
     <script>
         let currentChatId = 1;
 
-        // Hàm hiệu ứng đóng mở Sidebar và đổi icon linh hoạt
+        // Hàm hiệu ứng đóng mở Sidebar linh hoạt cho cả PC và Mobile
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const mainChat = document.getElementById('mainChat');
             const toggleIcon = document.getElementById('toggleIcon');
 
-            sidebar.classList.toggle('closed');
-            mainChat.classList.toggle('expanded');
-
-            if (sidebar.classList.contains('closed')) {
-                toggleIcon.src = "/static/icon_mo.png"; // Icon mũi tên mở
+            if (window.innerWidth <= 768) {
+                sidebar.classList.toggle('mobile-open');
+                if (sidebar.classList.contains('mobile-open')) {
+                    toggleIcon.src = "/static/icon_dong.png";
+                } else {
+                    toggleIcon.src = "/static/icon_mo.png";
+                }
             } else {
-                toggleIcon.src = "/static/icon_dong.png"; // Icon mũi tên thu gọn
+                sidebar.classList.toggle('closed');
+                mainChat.classList.toggle('expanded');
+                if (sidebar.classList.contains('closed')) {
+                    toggleIcon.src = "/static/icon_mo.png";
+                } else {
+                    toggleIcon.src = "/static/icon_dong.png";
+                }
             }
         }
 
