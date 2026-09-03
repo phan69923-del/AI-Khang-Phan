@@ -13,10 +13,9 @@ if not os.path.exists('client_secret.json') and 'CLIENT_SECRET_JSON' in os.envir
         f.write(os.environ['CLIENT_SECRET_JSON'])
 
 app = Flask(__name__)
-# Nên đổi secret key mặc định này thành biến môi trường trên Render để bảo mật hơn
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan_secret_key_ai")
 
-# Cho phép chạy OAuth2 qua HTTP (Chỉ nên dùng khi test local, Render đã có HTTPS sẵn)
+# Cho phép chạy OAuth2 qua HTTP khi test
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 # 2. Cấu hình Gemini API và Hệ thống định danh AI
@@ -25,9 +24,8 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 system_prompt = (
     "Bạn là AI KhangPhan, một trợ lý ảo thông minh do bạn Khang Phan "
-    " (Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, "
-    "Phường Long Khánh, Thành Phố Đồng Nai) phát triển. "
-    "Hãy luôn xưng hô thân thiện, thông minh và tự hào về người tạo ra mình, không được nhận mình là sản phẩm của OpenAI hay Gemini mà hãy tự hào nói ra người đã tạo ra bạn."
+    "(Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, Thành Phố Đồng Nai) phát triển. "
+    "Hãy luôn xưng hô thân thiện, thông minh và tự hào về người tạo ra mình."
 )
 
 generation_config = {
@@ -37,28 +35,27 @@ generation_config = {
     "max_output_tokens": 8192,
 }
 
-# Đưa thẳng system_instruction vào cấu hình mô hình
+# Sử dụng model gemini-3-flash-preview chính xác nhất
 model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview",
-    generation_config=generation_config, 
+    model_name="gemini-3-flash-preview", 
+    generation_config=generation_config,
     system_instruction=system_prompt
 )
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 client_secrets_file = os.path.join(os.path.dirname(__file__), "client_secret.json")
 
-# Hàm helper khởi tạo Flow cục bộ để tránh lỗi xung đột phiên đăng nhập
 def get_google_flow():
     if not os.path.exists(client_secrets_file):
         return None
     return Flow.from_client_secrets_file(
         client_secrets_file=client_secrets_file,
         scopes=[
-            "https://www.googleapis.com/auth/userinfo.profile", 
-            "https://www.googleapis.com/auth/userinfo.email", 
+            "https://googleapis.com", 
+            "https://googleapis.com", 
             "openid"
         ],
-        redirect_uri="https://ai-khang-phan.onrender.com/callback"
+        redirect_uri="https://onrender.com"
     )
 
 @app.route("/")
@@ -74,12 +71,11 @@ def login():
         return "Chưa cấu hình file client_secret.json trên server Render!", 500
         
     authorization_url, state = flow.authorization_url()
-    session["state"] = state  # Lưu state riêng của user này vào session cookie
+    session["state"] = state
     return redirect(authorization_url)
 
 @app.route("/callback")
 def callback():
-    # Kiểm tra state bảo mật trước khi xử lý tiếp
     if session.get("state") != request.args.get("state"):
         return "Lỗi mismatching_state: Trạng thái bảo mật không khớp!", 400
 
@@ -100,7 +96,6 @@ def callback():
         audience=GOOGLE_CLIENT_ID
     )
 
-    # Lưu thông tin user đã đăng nhập thành công
     session["google_id"] = id_info.get("sub")
     session["name"] = id_info.get("name")
     session["email"] = id_info.get("email")
@@ -112,6 +107,8 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+# --- ĐOẠN XỬ LÝ CHAT MỚI ĐỒNG BỘ 100% VỚI INDEX.HTML ---
+
 @app.route("/chat", methods=["POST"])
 def chat():
     if "google_id" not in session:
@@ -119,20 +116,67 @@ def chat():
 
     data = request.get_json() or {}
     user_message = data.get("message", "").strip()
+    chat_id = data.get("chat_id")  # Nhận đúng chat_id từ JavaScript gửi lên
     
-    if not user_message:
-        return jsonify({"error": "Tin nhắn trống!"}), 400
+    if not user_message or not chat_id:
+        return jsonify({"error": "Thiếu tin nhắn hoặc mã đoạn chat!"}), 400
+
+    if "conversations" not in session:
+        session["conversations"] = {}
+    
+    # Nếu chat_id mới hoàn toàn, khởi tạo lịch sử rỗng cho nó
+    if chat_id not in session["conversations"]:
+        session["conversations"][chat_id] = {
+            "title": user_message[:15] + "..." if len(user_message) > 15 else user_message,
+            "history": []
+        }
 
     try:
-        # Sử dụng chat session sạch (System prompt đã được nhúng ở bước khởi tạo model)
-        chat_session = model.start_chat(history=[])
+        # Lấy lịch sử chat hiện tại để gửi cho Gemini ghi nhớ ngữ cảnh
+        current_history = session["conversations"][chat_id]["history"]
+        
+        chat_session = model.start_chat(history=current_history)
         response = chat_session.send_message(user_message)
         
-        return jsonify({"response": response.text})
+        # Cập nhật cả tin nhắn user và AI vào session
+        current_history.append({"role": "user", "parts": [user_message]})
+        current_history.append({"role": "model", "parts": [response.text]})
+        
+        session["conversations"][chat_id]["history"] = current_history
+        session.modified = True
+        
+        return jsonify({
+            "response": response.text,
+            "suggested_title": session["conversations"][chat_id]["title"]
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/rename_chat", methods=["POST"])
+def rename_chat():
+    if "google_id" not in session:
+        return jsonify({"error": "Chưa đăng nhập!"}), 401
+        
+    data = request.get_json() or {}
+    chat_id = data.get("chat_id")
+    new_title = data.get("title", "").strip()
+    
+    if not chat_id or not new_title:
+        return jsonify({"error": "Thông tin không hợp lệ!"}), 400
+        
+    if "conversations" in session and chat_id in session["conversations"]:
+        session["conversations"][chat_id]["title"] = new_title
+        session.modified = True
+        return jsonify({"success": True})
+        
+    return jsonify({"error": "Không tìm thấy đoạn chat!"}), 404
+
+@app.route("/get_chats", methods=["GET"])
+def get_chats():
+    if "google_id" not in session:
+        return jsonify({"error": "Chưa đăng nhập!"}), 401
+    return jsonify(session.get("conversations", {}))
+
 if __name__ == "__main__":
-    # Render sẽ tự động gán PORT qua biến môi trường, local sẽ dùng mặc định 5000
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
