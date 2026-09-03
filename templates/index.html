@@ -85,8 +85,14 @@
         body.light-mode .send-btn {
             color: #0b57d0;
         }
+        body.light-mode .sidebar-toggle-btn:hover {
+            background-color: #e2e8f0;
+        }
+        body.light-mode .sidebar-toggle-btn img {
+            filter: none; /* Giữ nguyên màu gốc của icon ở chế độ sáng */
+        }
 
-        /* Sidebar tối mặc định */
+        /* Sidebar với hiệu ứng trượt mượt mà */
         .sidebar {
             width: 260px;
             background-color: #1e1f20;
@@ -99,6 +105,11 @@
             left: 0;
             top: 0;
             z-index: 1000;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar.closed {
+            transform: translateX(-100%);
         }
 
         .sidebar-top {
@@ -212,7 +223,7 @@
             background-color: #38393a;
         }
 
-        /* Main Chat Area */
+        /* Main Chat Area với hiệu ứng co giãn đều */
         .main-chat {
             margin-left: 260px;
             width: calc(100% - 260px);
@@ -220,6 +231,12 @@
             flex-direction: column;
             height: 100vh;
             background-color: #131314;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .main-chat.expanded {
+            margin-left: 0;
+            width: 100%;
         }
 
         .chat-header {
@@ -228,6 +245,30 @@
             font-weight: 500;
             color: #c4c7c5;
             border-bottom: 1px solid #2b2c2d;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* Nút toggle mở/đóng sidebar */
+        .sidebar-toggle-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .sidebar-toggle-btn:hover {
+            background-color: #2b2c2d;
+        }
+        .sidebar-toggle-btn img {
+            width: 20px;
+            height: 20px;
+            filter: invert(1); /* Mặc định đổi sang màu sáng cho nền tối */
         }
 
         .chat-messages {
@@ -345,9 +386,12 @@
     </div>
 
     <!-- Main Chat Area -->
-    <div class="main-chat">
+    <div class="main-chat" id="mainChat">
         <div class="chat-header">
-            Trò chuyện cùng AI KhangPhan
+            <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
+                <img id="toggleIcon" src="/static/icon_dong.png" alt="Toggle Sidebar">
+            </button>
+            <span>Trò chuyện cùng AI KhangPhan</span>
         </div>
 
         <div class="chat-messages" id="chatMessages">
@@ -365,7 +409,23 @@
     </div>
 
     <script>
-        let currentChatId = 1; // Mặc định chat ID giả lập nếu chưa load từ API
+        let currentChatId = 1;
+
+        // Hàm hiệu ứng đóng mở Sidebar và đổi icon linh hoạt
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const mainChat = document.getElementById('mainChat');
+            const toggleIcon = document.getElementById('toggleIcon');
+
+            sidebar.classList.toggle('closed');
+            mainChat.classList.toggle('expanded');
+
+            if (sidebar.classList.contains('closed')) {
+                toggleIcon.src = "/static/icon_mo.png"; // Icon mũi tên mở
+            } else {
+                toggleIcon.src = "/static/icon_dong.png"; // Icon mũi tên thu gọn
+            }
+        }
 
         function autoResize(textarea) {
             textarea.style.height = 'auto';
@@ -412,7 +472,6 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
-                // Gọi vào route '/chat' của Flask server đã cấu hình Database
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
