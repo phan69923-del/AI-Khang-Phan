@@ -734,7 +734,7 @@ CHAT_HTML_TEMPLATE = """
 
         async function deleteChat(event, id) {
             event.stopPropagation();
-            if (!confirm("Đại vương có chắc chắn muốn xóa đoạn chat này không?")) return;
+            if (!confirm("Bạn có chắc chắn muốn xóa đoạn chat này không?")) return;
 
             try {
                 const response = await fetch('/delete_chat', {
@@ -913,9 +913,9 @@ def privacy():
     <body>
         <div class="container">
             <h1>Chính Sách Bảo Mật</h1>
-            <p>Chào mừng đại vương đến với trang Chính sách bảo mật của ứng dụng <strong>AI Khang Phan</strong>.</p>
+            <p>Chào mừng bạn đến với trang Chính sách bảo mật của ứng dụng <strong>AI Khang Phan</strong>.</p>
             <p>Chúng tôi tôn trọng và cam kết bảo vệ quyền riêng tư cũng như dữ liệu cá nhân của người dùng khi sử dụng dịch vụ đăng nhập và trò chuyện AI.</p>
-            <p>Mọi thông tin tài khoản và lịch sử trò chuyện được lưu trữ an toàn và chỉ phục vụ cho mục đích trải nghiệm cá nhân của đại vương.</p>
+            <p>Mọi thông tin tài khoản và lịch sử trò chuyện được lưu trữ an toàn và chỉ phục vụ cho mục đích trải nghiệm cá nhân của bạn.</p>
         </div>
     </body>
     </html>
