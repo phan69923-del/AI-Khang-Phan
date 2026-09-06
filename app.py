@@ -986,13 +986,30 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
-     chat_session = client.chats.create(
+   @app.route('/chat', methods=['POST'])
+def chat():
+    if 'user' not in session:
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+        
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        chat_id = data.get('chat_id')
+        
+        if not user_message:
+            return jsonify({'error': 'Tin nhắn trống'}), 400
+
+        if chat_id in chat_sessions and chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
+            chat_sessions[chat_id]["title"] = user_message[:25] + ('...' if len(user_message) > 25 else '')
+
+        if chat_id not in server_histories:
+            server_histories[chat_id] = []
+
+        chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
             history=server_histories[chat_id]
         )
 
-        # Đưa system instruction trực tiếp vào tin nhắn đầu hoặc cấu hình qua client nếu SDK hỗ trợ, 
-        # hoặc gộp chung vào prompt tin nhắn để ép AI nhớ kỹ thân thế:
         full_message = (
             "[HỆ THỐNG QUY ĐỊNH: Bạn là trợ lý ảo AI KhangPhan. "
             "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
