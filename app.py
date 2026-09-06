@@ -702,7 +702,7 @@ def chat():
             server_histories[chat_id] = []
 
         chat_session = client.chats.create(
-            model='gemini-2.5-flash',
+            model='gemini-3.5-flash-lite',
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
