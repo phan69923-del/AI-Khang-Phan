@@ -986,9 +986,10 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
-        chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
-            history=server_histories[chat_id],
+        # Gọi Gemini bằng cấu hình tối ưu trực tiếp
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=user_message,
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
@@ -999,11 +1000,8 @@ def chat():
                 )
             }
         )
-
-        response = chat_session.send_message(user_message)
+        
         bot_response = response.text
-
-        server_histories[chat_id] = chat_session.get_history()
 
         chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
         chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
@@ -1020,9 +1018,8 @@ def chat():
         })
 
     except Exception as e:
-        traceback.print_exc()  # In lỗi chi tiết ra console/terminal của Render để dễ kiểm tra
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
