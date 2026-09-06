@@ -970,6 +970,9 @@ def chat():
             "parts": [{"text": bot_response}]
         })
 
+        if chat_id not in chat_sessions:
+            chat_sessions[chat_id] = {"title": user_message[:25], "messages": []}
+
         chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
         chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
 
@@ -987,6 +990,43 @@ def chat():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/new_chat', methods=['POST'])
+def new_chat():
+    if 'user' not in session:
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+    data = request.get_json() or {}
+    chat_id = data.get('chat_id')
+    if chat_id:
+        chat_sessions[chat_id] = {
+            "title": "Cuộc trò chuyện mới",
+            "messages": []
+        }
+        server_histories[chat_id] = []
+        khangphan_memory.save_memory_data({
+            "sessions": chat_sessions,
+            "histories": server_histories,
+            "users": users_db
+        })
+    return jsonify({"success": True, "sessions": chat_sessions})
+
+@app.route('/delete_chat', methods=['POST'])
+def delete_chat():
+    if 'user' not in session:
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+    data = request.get_json() or {}
+    chat_id = data.get('chat_id')
+    if chat_id in chat_sessions:
+        del chat_sessions[chat_id]
+    if chat_id in server_histories:
+        del server_histories[chat_id]
+    khangphan_memory.save_memory_data({
+        "sessions": chat_sessions,
+        "histories": server_histories,
+        "users": users_db
+    })
+    return jsonify({"success": True, "sessions": chat_sessions})
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
