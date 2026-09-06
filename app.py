@@ -6,7 +6,7 @@ from google import genai
 import khangphan_memory
 
 app = Flask(__name__)
-app.secret_key = 'khangphan_secret_key_cuc_ky_bao_mat'  # Cần thiết để dùng session đăng nhập
+app.secret_key = '07062014'  # Cần thiết để dùng session đăng nhập
 
 # Khởi tạo client Gemini đúng chuẩn
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "GEMINI_API_KEY"))
