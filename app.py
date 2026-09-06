@@ -4,7 +4,6 @@ from google import genai
 
 # Import module bộ nhớ riêng vừa tạo
 import khangphan_memory
-
 app = Flask(__name__)
 
 # Khởi tạo client Gemini
@@ -650,10 +649,10 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE, sessions=chat_sessions)
 
+@app.route('/google5cc9a7fb7376c26c.html')
 @app.route('/google5cc9a7fb7376c26c')
 def google_verify():
-    return "google5cc9a7fb7376c26c"
-
+    return "google-site-verification: google5cc9a7fb7376c26c.html"
 @app.route('/logout')
 def logout():
     return jsonify({"message": "Đã đăng xuất thành công"}), 200
