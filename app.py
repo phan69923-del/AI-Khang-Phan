@@ -656,8 +656,8 @@ def google_verify():
 
 @app.route('/logout')
 def logout():
-    return jsonify({"message": "Đã đăng xuất thành công"}), 200
-
+    session.pop('user', None)
+    return redirect(url_for('login'))
 @app.route('/new_chat', methods=['POST'])
 def new_chat():
     data = request.get_json()
