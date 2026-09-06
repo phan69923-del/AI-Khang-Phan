@@ -656,8 +656,8 @@ def google_verify():
 
 @app.route('/logout')
 def logout():
-    # Sếp có thể thay đổi đường dẫn redirect thành '/login' nếu có trang đăng nhập riêng
-    return redirect('/')
+    # Tự động chuyển hướng về trang /login khi người dùng bấm đăng xuất
+    return redirect('/login')
 
 @app.route('/new_chat', methods=['POST'])
 def new_chat():
