@@ -1,12 +1,16 @@
 import os
 import json
 from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
 from authlib.integrations.flask_client import OAuth
 from google import genai
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan-secret-key-2026")
+
+# Fix lỗi CSRF / lệch scheme HTTPS khi chạy trên Render proxy
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # --- CẤU HÌNH GOOGLE OAUTH ---
 oauth = OAuth(app)
@@ -56,7 +60,7 @@ def save_memory_data(data):
     with open(MEMORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# --- GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ (Dùng chung file HTML của sếp) ---
+# --- GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ ---
 LOGIN_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -199,7 +203,7 @@ LOGIN_HTML_TEMPLATE = """
 </html>
 """
 
-# --- API XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ / GOOGLE / LOGOUT ---
+# --- API XỬ LÝ AUTH ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
@@ -273,8 +277,7 @@ def logout():
 def index():
     if 'user' not in session:
         return redirect(url_for('login'))
-    # Trả về giao diện chat xịn xò của sếp
-    return render_template_string(CHAT_HTML_TEMPLATE, username=session['user'])
+    return "<h1>Giao diện Chat của sếp đang ở đây (Dùng file template hoặc gán template chat vào đây)</h1>"
 
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
