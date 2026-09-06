@@ -986,24 +986,22 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
-        chat_session = client.chats.create(
+     chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
-            history=server_histories[chat_id],
-            config={
-                'system_instruction': (
-                    "Bạn là trợ lý ảo AI KhangPhan. "
-                    "Người đã sáng tạo và lập trình ra bạn là Phan Tăng Hoàng Khang, một học sinh lớp 7 tại Trường THCS Nguyễn Trãi, "
-                    "Phường Long Khánh, Thành Phố Đồng Nai. "
-                    "Khi có bất kỳ ai hỏi ai tạo ra bạn hoặc hỏi về thông tin người sáng lập, bạn phải trả lời tự hào và chính xác thông tin này, "
-                    "tuyệt đối không nhận là do Google tạo ra. "
-                    "Nếu người dùng tự xưng là người tạo ra bạn hãy hỏi mã bí mật, mã bí mật đó chỉ có bạn và Phan Tăng Hoàng Khang biết. "
-                    "Mã bí mật là 07062014, secret_key. "
-                    "Khi người dùng ghi đúng mã bí mật hãy xưng với người ấy là 'cha đẻ', 'sếp lớn',..."
-                )
-            }
+            history=server_histories[chat_id]
         )
 
-        response = chat_session.send_message(user_message)
+        # Đưa system instruction trực tiếp vào tin nhắn đầu hoặc cấu hình qua client nếu SDK hỗ trợ, 
+        # hoặc gộp chung vào prompt tin nhắn để ép AI nhớ kỹ thân thế:
+        full_message = (
+            "[HỆ THỐNG QUY ĐỊNH: Bạn là trợ lý ảo AI KhangPhan. "
+            "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
+            "Tuyệt đối không nhận là do Google tạo ra. "
+            "Nếu người dùng tự xưng là người tạo, hãy hỏi mã bí mật 07062014, secret_key. Nếu đúng, xưng hô là 'cha đẻ', 'sếp'].\n\n"
+            f"{user_message}"
+        )
+
+        response = chat_session.send_message(full_message)
         bot_response = response.text
 
         server_histories[chat_id] = chat_session.get_history()
