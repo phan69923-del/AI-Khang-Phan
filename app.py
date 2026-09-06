@@ -12,12 +12,12 @@ app.secret_key = '07062014'  # Cần thiết để dùng session đăng nhập
 # Khởi tạo client Gemini đúng chuẩn
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "GEMINI_API_KEY"))
 
-# Cấu hình OAuth cho Google (Đã điền sẵn Client ID của bạn)
+# Cấu hình OAuth cho Google lấy trực tiếp từ biến môi trường của Render
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
-    client_id='555817347880-5aao290ldqp7g9saca8hrtsj9s4d9pu.apps.googleusercontent.com',
-    client_secret='NHAP_CLIENT_SECRET_CUA_BAN', # Thay mã bí mật khách hàng (Client secret) của bạn vào đây
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
