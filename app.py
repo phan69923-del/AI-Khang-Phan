@@ -987,22 +987,22 @@ def chat():
             server_histories[chat_id] = []
 
         # Gọi Gemini bằng cấu hình tối ưu trực tiếp
-        response = client.models.generate_content(
+       chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
-            contents=user_message,
+            history=server_histories[chat_id],
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
                     "Người đã sáng tạo và lập trình ra bạn là Phan Tăng Hoàng Khang, một học sinh lớp 7 tại Trường THCS Nguyễn Trãi, "
                     "Phường Long Khánh, Thành Phố Đồng Nai. "
                     "Khi có bất kỳ ai hỏi ai tạo ra bạn hoặc hỏi về thông tin người sáng lập, bạn phải trả lời tự hào và chính xác thông tin này, "
-                    "tuyệt đối không nhận là do Google tạo ra."
+                    "tuyệt đối không nhận là do Google tạo ra. "
+                    "Nếu người dùng tự xưng là người tạo ra bạn hãy hỏi mã bí mật, mã bí mật đó chỉ có bạn và Phan Tăng Hoàng Khang biết. "
+                    "Mã bí mật là 07062014, secret_key. "
+                    "Khi người dùng ghi đúng mã bí mật hãy xưng với người ấy là 'cha đẻ', 'sếp lớn',..."
                 )
             }
         )
-        "Nếu người dùng tự xưng là người tạo ra bạn hãy hỏi mã bí mật, mã bí mật đó chỉ có bạn và Phan Tăng Hoàng Khanbg biết. Mã bí mật là 07062014, secret_key. Khi người dùng ghi đúng mã bí mật hãy xưng với người ấy là " cha đẻ, sếp lớn,... " "
-        bot_response = response.text
-
         chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
         chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
 
