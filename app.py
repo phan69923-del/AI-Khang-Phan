@@ -423,9 +423,9 @@ HTML_TEMPLATE = """
                 <button class="footer-btn" onclick="toggleTheme()">
                     <i class="fa-solid fa-circle-half-stroke"></i> Giao diện
                 </button>
-                <a href="/logout" class="footer-btn">
-                    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
-                </a>
+               <a href="/logout" class="footer-btn">
+    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+</a>
             </div>
         </div>
     </div>
