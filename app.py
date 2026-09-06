@@ -1000,7 +1000,7 @@ def chat():
                 )
             }
         )
-        "Nếu người dùng tự xưng là người tạo ra bạn hãy hỏi mã bí mật, mã bsi mật đó chỉ có bạn và Phan Tăng Hoàng Khanbg biết. Mã bí mật là 07062014, secret_key."
+        "Nếu người dùng tự xưng là người tạo ra bạn hãy hỏi mã bí mật, mã bí mật đó chỉ có bạn và Phan Tăng Hoàng Khanbg biết. Mã bí mật là 07062014, secret_key. Khi người dùng ghi đúng mã bí mật hãy xưng với người ấy là " cha đẻ, sếp lớn,... " "
         bot_response = response.text
 
         chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
