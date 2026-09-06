@@ -1,23 +1,34 @@
 import os
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
 from google import genai
+from authlib.integrations.flask_client import OAuth
 
-# Import module bộ nhớ riêng
 import khangphan_memory
 
 app = Flask(__name__)
-app.secret_key = 'khangphan_secret_key_cuc_ky_bao_mat'  # Cần thiết để dùng session đăng nhập
+app.secret_key = os.environ.get('SECRET_KEY', 'khangphan_secret_key_cuc_ky_bao_mat')
 
-# Khởi tạo client Gemini
-client = genai.Client(api_key="GEMINI_API_KEY")
+# Khởi tạo client Gemini lấy API key từ biến môi trường
+client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
 
 # Load bộ nhớ toàn cục từ database
 db = khangphan_memory.load_memory_data()
-chat_sessions = db.setdefault("sessions", {})        # Lưu tiêu đề & tin nhắn giao diện
-server_histories = db.setdefault("histories", {})    # Lưu bộ nhớ ngữ cảnh Gemini
-users_db = db.setdefault("users", {})                # Lưu tài khoản đăng ký (email: password)
+chat_sessions = db.setdefault("sessions", {})        
+server_histories = db.setdefault("histories", {})    
+users_db = db.setdefault("users", {})                
 
-# ==================== GIAO DIỆN LOGIN / REGISTER ====================
+# Khởi tạo Google OAuth 2.0 lấy thông tin từ biến môi trường
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
+
 LOGIN_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -158,7 +169,6 @@ LOGIN_HTML_TEMPLATE = """
 </html>
 """
 
-# ==================== GIAO DIỆN CHÍNH (CHAT AI) ====================
 CHAT_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -170,380 +180,37 @@ CHAT_HTML_TEMPLATE = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', sans-serif;
-        }
-
-        body {
-            background-color: #131314;
-            color: #e3e3e3;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-            transition: background 0.3s, color 0.3s;
-        }
-
-        body.light-mode {
-            background-color: #ffffff;
-            color: #1f1f1f;
-        }
-        body.light-mode .sidebar {
-            background-color: #f0f4f9;
-            border-right: 1px solid #d9d9d9;
-        }
-        body.light-mode .sidebar-logo-container span,
-        body.light-mode .new-chat-btn,
-        body.light-mode .history-item {
-            color: #1f1f1f;
-        }
-        body.light-mode .new-chat-btn {
-            background-color: #e2e8f0;
-        }
-        body.light-mode .new-chat-btn:hover {
-            background-color: #cbd5e1;
-        }
-        body.light-mode .history-item:hover, 
-        body.light-mode .history-item.active {
-            background-color: #e2e8f0;
-        }
-        body.light-mode .sidebar-footer {
-            border-top: 1px solid #d9d9d9;
-            color: #555555;
-        }
-        body.light-mode .footer-btn {
-            background-color: #e2e8f0;
-            color: #1f1f1f;
-        }
-        body.light-mode .footer-btn:hover {
-            background-color: #cbd5e1;
-        }
-        body.light-mode .chat-header {
-            border-bottom: 1px solid #d9d9d9;
-            color: #444444;
-        }
-        body.light-mode .main-chat {
-            background-color: #ffffff;
-        }
-        body.light-mode .message.bot {
-            background-color: #f0f4f9;
-            color: #1f1f1f;
-            border: 1px solid #d9d9d9;
-        }
-        body.light-mode .message.user {
-            background-color: #e2e8f0;
-            color: #1f1f1f;
-        }
-        body.light-mode .chat-input-box {
-            background-color: #f0f4f9;
-            border: 1px solid #d9d9d9;
-        }
-        body.light-mode .chat-input-box textarea {
-            color: #1f1f1f;
-        }
-        body.light-mode .send-btn {
-            color: #0b57d0;
-        }
-        body.light-mode .sidebar-toggle-btn:hover {
-            background-color: #e2e8f0;
-        }
-        body.light-mode .sidebar-toggle-btn {
-            color: #1f1f1f;
-        }
-
-        .sidebar {
-            width: 260px;
-            background-color: #1e1f20;
-            border-right: 1px solid #2b2c2d;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            height: 100vh;
-            position: fixed;
-            left: 0;
-            top: 0;
-            z-index: 1000;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-
-        .sidebar.closed {
-            transform: translateX(-100%);
-        }
-
-        .sidebar-top {
-            padding: 16px;
-        }
-
-        .sidebar-logo-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 4px;
-            margin-bottom: 20px;
-        }
-
-        .sidebar-logo-container i {
-            font-size: 20px;
-            color: #8ab4f8;
-        }
-
-        .sidebar-logo-container span {
-            color: #ffffff;
-            font-weight: 600;
-            font-size: 15px;
-        }
-
-        .new-chat-btn {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background-color: #2b2c2d;
-            color: #ffffff;
-            border: none;
-            padding: 12px 16px;
-            border-radius: 30px;
-            width: 100%;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background 0.2s;
-        }
-
-        .new-chat-btn:hover {
-            background-color: #38393a;
-        }
-
-        .chat-history {
-            padding: 0 16px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .history-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            color: #cccccc;
-            cursor: pointer;
-            margin-top: 5px;
-            transition: background 0.2s;
-        }
-
-        .history-item:hover, .history-item.active {
-            background-color: #2b2c2d;
-            color: #ffffff;
-        }
-
-        .history-content {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .history-text {
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .delete-chat-btn {
-            background: none;
-            border: none;
-            color: #888888;
-            cursor: pointer;
-            padding: 4px 6px;
-            border-radius: 50%;
-            font-size: 12px;
-            transition: color 0.2s, background 0.2s;
-        }
-
-        .delete-chat-btn:hover {
-            color: #ff6b6b;
-            background-color: rgba(255, 107, 107, 0.1);
-        }
-
-        .sidebar-footer {
-            padding: 16px;
-            padding-bottom: calc(16px + env(safe-area-inset-bottom));
-            border-top: 1px solid #2b2c2d;
-            font-size: 13px;
-            color: #aaaaaa;
-        }
-
-        .footer-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .footer-btn {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            background-color: #2b2c2d;
-            color: #ffffff;
-            border: none;
-            padding: 8px 10px;
-            border-radius: 16px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            transition: background 0.2s;
-            text-decoration: none;
-        }
-
-        .footer-btn:hover {
-            background-color: #38393a;
-        }
-
-        .main-chat {
-            margin-left: 260px;
-            width: calc(100% - 260px);
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            background-color: #131314;
-            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .main-chat.expanded {
-            margin-left: 0;
-            width: 100%;
-        }
-
-        .chat-header {
-            padding: 16px 24px;
-            font-size: 16px;
-            font-weight: 500;
-            color: #c4c7c5;
-            border-bottom: 1px solid #2b2c2d;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .sidebar-toggle-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #e3e3e3;
-            font-size: 16px;
-            transition: background 0.2s;
-        }
-        .sidebar-toggle-btn:hover {
-            background-color: #2b2c2d;
-        }
-
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            max-width: 900px;
-            width: 100%;
-            margin: 0 auto;
-        }
-
-        .message {
-            max-width: 80%;
-            line-height: 1.6;
-            font-size: 15px;
-            padding: 12px 18px;
-            border-radius: 16px;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-        }
-
-        .message.user {
-            background-color: #2b2c2d;
-            align-self: flex-end;
-            color: #ffffff;
-            border-bottom-right-radius: 4px;
-        }
-
-        .message.bot {
-            background-color: #1e1f20;
-            align-self: flex-start;
-            color: #e3e3e3;
-            border: 1px solid #2b2c2d;
-            border-bottom-left-radius: 4px;
-        }
-
-        .chat-input-container {
-            padding: 20px 24px;
-            padding-bottom: calc(20px + env(safe-area-inset-bottom));
-            background-color: transparent;
-        }
-
-        .chat-input-box {
-            max-width: 900px;
-            margin: 0 auto;
-            background-color: #1e1f20;
-            border-radius: 30px;
-            display: flex;
-            align-items: center;
-            padding: 8px 16px;
-            border: 1px solid #333333;
-        }
-
-        .chat-input-box textarea {
-            flex: 1;
-            background: none;
-            border: none;
-            color: #ffffff;
-            font-size: 15px;
-            resize: none;
-            outline: none;
-            max-height: 120px;
-            padding: 8px 0;
-        }
-
-        .send-btn {
-            background: none;
-            border: none;
-            color: #8ab4f8;
-            font-size: 18px;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            transition: background 0.2s;
-        }
-
-        .send-btn:hover {
-            background-color: #2b2c2d;
-        }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            .sidebar.mobile-open {
-                transform: translateX(0);
-                box-shadow: 5px 0 15px rgba(0,0,0,0.5);
-            }
-            .main-chat {
-                margin-left: 0 !important;
-                width: 100% !important;
-            }
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: #131314; color: #e3e3e3; display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 260px; background-color: #1e1f20; border-right: 1px solid #2b2c2d; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; }
+        .sidebar-top { padding: 16px; }
+        .sidebar-logo-container { display: flex; align-items: center; gap: 10px; padding: 8px 4px; margin-bottom: 20px; }
+        .sidebar-logo-container i { font-size: 20px; color: #8ab4f8; }
+        .sidebar-logo-container span { color: #ffffff; font-weight: 600; font-size: 15px; }
+        .new-chat-btn { display: flex; align-items: center; gap: 10px; background-color: #2b2c2d; color: #ffffff; border: none; padding: 12px 16px; border-radius: 30px; width: 100%; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .new-chat-btn:hover { background-color: #38393a; }
+        .chat-history { padding: 0 16px; overflow-y: auto; flex: 1; }
+        .history-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 20px; font-size: 14px; color: #cccccc; cursor: pointer; margin-top: 5px; }
+        .history-item:hover, .history-item.active { background-color: #2b2c2d; color: #ffffff; }
+        .history-content { display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; }
+        .history-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .delete-chat-btn { background: none; border: none; color: #888888; cursor: pointer; padding: 4px 6px; border-radius: 50%; font-size: 12px; }
+        .delete-chat-btn:hover { color: #ff6b6b; background-color: rgba(255, 107, 107, 0.1); }
+        .sidebar-footer { padding: 16px; border-top: 1px solid #2b2c2d; font-size: 13px; color: #aaaaaa; }
+        .footer-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .footer-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: #2b2c2d; color: #ffffff; border: none; padding: 8px 10px; border-radius: 16px; cursor: pointer; font-size: 13px; font-weight: 500; text-decoration: none; }
+        .footer-btn:hover { background-color: #38393a; }
+        .main-chat { margin-left: 260px; width: calc(100% - 260px); display: flex; flex-direction: column; height: 100vh; background-color: #131314; }
+        .chat-header { padding: 16px 24px; font-size: 16px; font-weight: 500; color: #c4c7c5; border-bottom: 1px solid #2b2c2d; display: flex; align-items: center; gap: 12px; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%; margin: 0 auto; }
+        .message { max-width: 80%; line-height: 1.6; font-size: 15px; padding: 12px 18px; border-radius: 16px; word-wrap: break-word; white-space: pre-wrap; }
+        .message.user { background-color: #2b2c2d; align-self: flex-end; color: #ffffff; border-bottom-right-radius: 4px; }
+        .message.bot { background-color: #1e1f20; align-self: flex-start; color: #e3e3e3; border: 1px solid #2b2c2d; border-bottom-left-radius: 4px; }
+        .chat-input-container { padding: 20px 24px; }
+        .chat-input-box { max-width: 900px; margin: 0 auto; background-color: #1e1f20; border-radius: 30px; display: flex; align-items: center; padding: 8px 16px; border: 1px solid #333333; }
+        .chat-input-box textarea { flex: 1; background: none; border: none; color: #ffffff; font-size: 15px; resize: none; outline: none; max-height: 120px; padding: 8px 0; }
+        .send-btn { background: none; border: none; color: #8ab4f8; font-size: 18px; cursor: pointer; padding: 8px; border-radius: 50%; }
+        .send-btn:hover { background-color: #2b2c2d; }
     </style>
 </head>
 <body>
@@ -561,11 +228,8 @@ CHAT_HTML_TEMPLATE = """
         <div class="chat-history" id="chatHistory"></div>
 
         <div class="sidebar-footer">
-            <div> Khang Phan WorkSpace </div>
+            <div>Khang Phan WorkSpace</div>
             <div class="footer-actions">
-                <button class="footer-btn" onclick="toggleTheme()">
-                    <i class="fa-solid fa-circle-half-stroke"></i> Giao diện
-                </button>
                 <a href="/logout" class="footer-btn">
                     <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
                 </a>
@@ -575,16 +239,11 @@ CHAT_HTML_TEMPLATE = """
 
     <div class="main-chat" id="mainChat">
         <div class="chat-header">
-            <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
-                <i id="toggleIcon" class="fa-solid fa-bars"></i>
-            </button>
             <span id="chatTitleHeader">AI KhangPhan</span>
         </div>
 
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">
-                Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?
-            </div>
+            <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
         </div>
 
         <div class="chat-input-container">
@@ -604,24 +263,9 @@ CHAT_HTML_TEMPLATE = """
             currentChatId = sessionKeys[0];
             loadChatSession(currentChatId);
         } else {
-            startNewChat(false);
+            startNewChat();
         }
         renderHistoryList();
-
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const mainChat = document.getElementById('mainChat');
-            const toggleIcon = document.getElementById('toggleIcon');
-
-            if (window.innerWidth <= 768) {
-                sidebar.classList.toggle('mobile-open');
-                toggleIcon.className = sidebar.classList.contains('mobile-open') ? "fa-solid fa-xmark" : "fa-solid fa-bars";
-            } else {
-                sidebar.classList.toggle('closed');
-                mainChat.classList.toggle('expanded');
-                toggleIcon.className = sidebar.classList.contains('closed') ? "fa-solid fa-arrow-right" : "fa-solid fa-bars";
-            }
-        }
 
         function autoResize(textarea) {
             textarea.style.height = 'auto';
@@ -633,10 +277,6 @@ CHAT_HTML_TEMPLATE = """
                 event.preventDefault();
                 sendMessage();
             }
-        }
-
-        function toggleTheme() {
-            document.body.classList.toggle('light-mode');
         }
 
         async function startNewChat() {
@@ -699,7 +339,7 @@ CHAT_HTML_TEMPLATE = """
 
         async function deleteChat(event, id) {
             event.stopPropagation();
-            if (!confirm("Đại vương có chắc chắn muốn xóa đoạn chat này không?")) return;
+            if (!confirm("Bạn có chắc chắn muốn xóa đoạn chat này không?")) return;
 
             try {
                 const response = await fetch('/delete_chat', {
@@ -745,40 +385,25 @@ CHAT_HTML_TEMPLATE = """
             chatMessages.appendChild(botMsg);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            let retries = 3;
-            let success = false;
-            let finalBotResponse = "";
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: messageText, chat_id: currentChatId })
+                });
 
-            while (retries > 0 && !success) {
-                try {
-                    const response = await fetch('/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: messageText, chat_id: currentChatId })
-                    });
-
-                    const data = await response.json();
-                    
-                    if (response.ok && data.response) {
-                        finalBotResponse = data.response;
-                        botMsg.textContent = finalBotResponse;
-                        success = true;
-                        chatSessions = data.sessions;
-                        document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
-                        renderHistoryList();
-                    } else {
-                        throw new Error(data.error || "Server quá tải");
-                    }
-                } catch (error) {
-                    retries--;
-                    if (retries === 0) {
-                        finalBotResponse = "Hệ thống đang quá tải tạm thời (Lỗi 503). Vui lòng thử lại sau ít phút!";
-                        botMsg.textContent = finalBotResponse;
-                    } else {
-                        botMsg.textContent = `Đang thử kết nối lại lần thứ ${4 - retries}...`;
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                    }
+                const data = await response.json();
+                
+                if (response.ok && data.response) {
+                    botMsg.textContent = data.response;
+                    chatSessions = data.sessions;
+                    document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
+                    renderHistoryList();
+                } else {
+                    throw new Error(data.error || "Server quá tải");
                 }
+            } catch (error) {
+                botMsg.textContent = "Hệ thống đang gặp sự cố. Vui lòng thử lại sau!";
             }
 
             chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -787,8 +412,6 @@ CHAT_HTML_TEMPLATE = """
 </body>
 </html>
 """
-
-# ==================== ROUTE XỬ LÝ FLASK ====================
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -820,13 +443,42 @@ def register():
     users_db[email] = password
     session['user'] = email
     
-    # Lưu lại database
     khangphan_memory.save_memory_data({
         "sessions": chat_sessions, 
         "histories": server_histories, 
         "users": users_db
     })
     return jsonify({"success": True, "redirect": "/"})
+
+@app.route('/login/google')
+def google_login():
+    redirect_uri = url_for('google_authorize', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/login/google/callback')
+@app.route('/login/google/authorized')
+@app.route('/callback')
+def google_authorize():
+    try:
+        token = google.authorize_access_token()
+        user_info = token.get('userinfo')
+        
+        if user_info:
+            email = user_info['email']
+            if email not in users_db:
+                users_db[email] = "GOOGLE_OAUTH_USER"
+                khangphan_memory.save_memory_data({
+                    "sessions": chat_sessions, 
+                    "histories": server_histories, 
+                    "users": users_db
+                })
+            
+            session['user'] = email
+            return redirect('/')
+    except Exception as e:
+        print("Google Auth Error:", e)
+    
+    return redirect('/login')
 
 @app.route('/logout')
 def logout():
@@ -839,18 +491,13 @@ def index():
         return redirect('/login')
     return render_template_string(CHAT_HTML_TEMPLATE, sessions=chat_sessions)
 
-@app.route('/google5cc9a7fb7376c26c.html')
-@app.route('/google5cc9a7fb7376c26c')
-def google_verify():
-    return "google-site-verification: google5cc9a7fb7376c26c.html"
-
 @app.route('/new_chat', methods=['POST'])
 def new_chat():
     if 'user' not in session:
         return jsonify({'error': 'Chưa đăng nhập'}), 401
         
-    data = request.get_json()
-    chat_id = data.get('chat_id')
+    data = request.get_json() or {}
+    chat_id = data.get('chat_id', 'chat_1')
     
     chat_sessions[chat_id] = {
         "title": "Cuộc trò chuyện mới",
@@ -870,7 +517,7 @@ def delete_chat():
     if 'user' not in session:
         return jsonify({'error': 'Chưa đăng nhập'}), 401
         
-    data = request.get_json()
+    data = request.get_json() or {}
     chat_id = data.get('chat_id')
     
     if chat_id in chat_sessions:
@@ -891,7 +538,7 @@ def chat():
         return jsonify({'error': 'Chưa đăng nhập'}), 401
         
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         user_message = data.get('message', '').strip()
         chat_id = data.get('chat_id')
         
