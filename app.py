@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for
 from google import genai
 
 # Import module bộ nhớ riêng vừa tạo
@@ -423,9 +423,9 @@ HTML_TEMPLATE = """
                 <button class="footer-btn" onclick="toggleTheme()">
                     <i class="fa-solid fa-circle-half-stroke"></i> Giao diện
                 </button>
-               <a href="/logout" class="footer-btn">
-    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
-</a>
+                <a href="/logout" class="footer-btn">
+                    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+                </a>
             </div>
         </div>
     </div>
@@ -653,9 +653,11 @@ def index():
 @app.route('/google5cc9a7fb7376c26c')
 def google_verify():
     return "google-site-verification: google5cc9a7fb7376c26c.html"
+
 @app.route('/logout')
 def logout():
-    return jsonify({"message": "Đã đăng xuất thành công"}), 200
+    # Sếp có thể thay đổi đường dẫn redirect thành '/login' nếu có trang đăng nhập riêng
+    return redirect('/')
 
 @app.route('/new_chat', methods=['POST'])
 def new_chat():
@@ -701,7 +703,7 @@ def chat():
             server_histories[chat_id] = []
 
         chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
+            model='gemini-2.5-flash',
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
