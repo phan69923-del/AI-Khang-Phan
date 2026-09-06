@@ -959,7 +959,7 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
-      chat_session = client.chats.create(
+        chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
             config={
                 'system_instruction': (
@@ -973,6 +973,7 @@ def chat():
             },
             history=server_histories[chat_id]
         )
+
         response = chat_session.send_message(user_message)
         bot_response = response.text
 
