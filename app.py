@@ -945,7 +945,7 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
- @app.route('/chat', methods=['POST'])
+@app.route('/chat', methods=['POST'])
 def chat():
     if 'user' not in session:
         return jsonify({'error': 'Chưa đăng nhập'}), 401
@@ -964,7 +964,6 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
-        # Khởi tạo chat với system_instruction chuẩn để bảo mật quy tắc ngầm
         chat_session = client.chats.create(
             model='gemini-2.5-flash',
             config=genai.types.ChatConfig(
@@ -980,11 +979,9 @@ def chat():
             history=server_histories[chat_id]
         )
 
-        # Gửi đúng tin nhắn thuần túy của user lên, không nhồi nhét quy tắc nữa
         response = chat_session.send_message(user_message)
         bot_response = response.text
 
-        # Lưu lịch sử server chỉ chứa câu hỏi sạch của user
         server_histories[chat_id].append({
             "role": "user",
             "parts": [{"text": user_message}]
@@ -1014,43 +1011,3 @@ def chat():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
-@app.route('/new_chat', methods=['POST'])
-def new_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-    data = request.get_json() or {}
-    chat_id = data.get('chat_id')
-    if chat_id:
-        chat_sessions[chat_id] = {
-            "title": "Cuộc trò chuyện mới",
-            "messages": []
-        }
-        server_histories[chat_id] = []
-        khangphan_memory.save_memory_data({
-            "sessions": chat_sessions,
-            "histories": server_histories,
-            "users": users_db
-        })
-    return jsonify({"success": True, "sessions": chat_sessions})
-
-@app.route('/delete_chat', methods=['POST'])
-def delete_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-    data = request.get_json() or {}
-    chat_id = data.get('chat_id')
-    if chat_id in chat_sessions:
-        del chat_sessions[chat_id]
-    if chat_id in server_histories:
-        del server_histories[chat_id]
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions,
-        "histories": server_histories,
-        "users": users_db
-    })
-    return jsonify({"success": True, "sessions": chat_sessions})
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
