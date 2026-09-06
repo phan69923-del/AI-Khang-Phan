@@ -8,12 +8,12 @@ import khangphan_memory
 app = Flask(__name__)
 
 # Khởi tạo client Gemini
-client = genai.Client(api_key="AQ....")
+client = genai.Client(api_key="GEMINI_API_KEY")
 
 # Load bộ nhớ từ file riêng biệt
 db = khangphan_memory.load_memory_data()
-chat_sessions = db.get("sessions", {})       # Lưu tiêu đề & tin nhắn hiển thị giao diện
-server_histories = db.get("histories", {})   # Lưu bộ nhớ ngữ cảnh để Gemini nhớ dai
+chat_sessions = db.get("sessions", {})        # Lưu tiêu đề & tin nhắn hiển thị giao diện
+server_histories = db.get("histories", {})    # Lưu bộ nhớ ngữ cảnh để Gemini nhớ dai
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -650,6 +650,10 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE, sessions=chat_sessions)
 
+@app.route('/google5cc9a7fb7376c26c')
+def google_verify():
+    return "google5cc9a7fb7376c26c"
+
 @app.route('/logout')
 def logout():
     return jsonify({"message": "Đã đăng xuất thành công"}), 200
@@ -698,7 +702,7 @@ def chat():
             server_histories[chat_id] = []
 
         chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
+            model='gemini-2.5-flash',
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
