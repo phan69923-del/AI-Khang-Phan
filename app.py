@@ -1,6 +1,7 @@
 import os
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
 from google import genai
+from authlib.integrations.flask_client import OAuth
 
 # Import module bộ nhớ riêng
 import khangphan_memory
@@ -10,6 +11,16 @@ app.secret_key = '07062014'  # Cần thiết để dùng session đăng nhập
 
 # Khởi tạo client Gemini đúng chuẩn
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "GEMINI_API_KEY"))
+
+# Cấu hình OAuth cho Google
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id='YOUR_GOOGLE_CLIENT_ID',         # Thay Client ID của bạn vào đây
+    client_secret='YOUR_GOOGLE_CLIENT_SECRET', # Thay Client Secret của bạn vào đây
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
 
 # Load bộ nhớ toàn cục từ database
 db = khangphan_memory.load_memory_data()
@@ -40,7 +51,7 @@ LOGIN_HTML_TEMPLATE = """
             background: #1e293b; 
             padding: 30px; 
             border-radius: 12px; 
-            width: 320px; 
+            width: 340px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
             text-align: center; 
         }
@@ -70,6 +81,35 @@ LOGIN_HTML_TEMPLATE = """
             transition: 0.2s;
         }
         button:hover { background: #1d4ed8; }
+        .google-btn {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-weight: 600;
+            text-decoration: none;
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 6px;
+        }
+        .google-btn:hover { background-color: #e2e8f0; }
+        .divider {
+            margin: 15px 0;
+            border-bottom: 1px solid #334155;
+            position: relative;
+        }
+        .divider span {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            padding: 0 10px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
         .toggle { margin-top: 20px; font-size: 14px; color: #94a3b8; cursor: pointer; }
         .toggle span { color: #38bdf8; text-decoration: underline; }
         .error { color: #f87171; font-size: 14px; margin-top: 12px; min-height: 18px; }
@@ -84,6 +124,13 @@ LOGIN_HTML_TEMPLATE = """
     
     <button id="submit-btn" onclick="handleSubmit()">Đăng Nhập</button>
     
+    <div class="divider"><span>HOẶC</span></div>
+
+    <a href="/login/google" class="google-btn">
+        <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Đăng nhập với Google
+    </a>
+
     <div class="error" id="error-msg"></div>
 
     <div class="toggle" onclick="toggleForm()">
@@ -791,6 +838,29 @@ def login():
     else:
         return jsonify({"success": False, "error": "Sai tài khoản hoặc mật khẩu!"}), 401
 
+# ==================== ROUTE GOOGLE OAUTH ====================
+@app.route('/login/google')
+def google_login():
+    redirect_uri = url_for('google_auth', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/login/google/callback')
+def google_auth():
+    token = google.authorize_access_token()
+    user_info = token.get('userinfo')
+    if user_info:
+        email = user_info['email']
+        session['user'] = email
+        if email not in users_db:
+            users_db[email] = "GOOGLE_OAUTH_USER"
+            khangphan_memory.save_memory_data({
+                "sessions": chat_sessions, 
+                "histories": server_histories, 
+                "users": users_db
+            })
+        return redirect('/')
+    return redirect('/login')
+
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
@@ -891,7 +961,7 @@ def chat():
             server_histories[chat_id] = []
 
         chat_session = client.chats.create(
-            model='gemini-2.5-flash',
+            model='gemini-3.5-flash-lite',
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
