@@ -987,8 +987,7 @@ def chat():
 
         chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
-            history=server_hi
-        stories[chat_id],
+            history=server_histories[chat_id],
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
