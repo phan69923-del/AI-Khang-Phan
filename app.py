@@ -7,7 +7,7 @@ from authlib.integrations.flask_client import OAuth
 from google import genai
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan-secret-key-2026")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
 
 # Fix lỗi CSRF / lệch scheme HTTPS khi chạy trên Render proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -29,7 +29,7 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
 # --- CẤU HÌNH GEMINI API ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
-AI_MODEL_NAME = "gemini-2.5-flash-lite"
+AI_MODEL_NAME = "gemini-3.5-flash-lite"
 
 # --- QUẢN LÝ BỘ NHỚ LOCAL (JSON) ---
 MEMORY_DIR = "khangphan_memory"
