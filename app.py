@@ -914,7 +914,7 @@ def privacy():
             <h1>Chính Sách Bảo Mật</h1>
             <p>Chào mừng đại vương đến với trang Chính sách bảo mật của ứng dụng <strong>AI Khang Phan</strong>.</p>
             <p>Chúng tôi tôn trọng và cam kết bảo vệ quyền riêng tư cũng như dữ liệu cá nhân của người dùng khi sử dụng dịch vụ đăng nhập và trò chuyện AI.</p>
-            <p>Mọi thông tin tài khoản và lịch sử trò chuyện được lưu trữ an toàn và chỉ phục vụ cho mục đích trải nghiệm cá nhân của đại vương.</p>
+            <p>Mọi thông tin tài khoản và lịch sử trò chuyện được lưu trữ an toàn và chỉ phục vụ cho mục đích trải nghiệm cá nhân của bạn.</p>
         </div>
     </body>
     </html>
