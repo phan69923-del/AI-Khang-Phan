@@ -895,6 +895,31 @@ def index():
         return redirect('/login')
     return render_template_string(CHAT_HTML_TEMPLATE, sessions=chat_sessions)
 
+@app.route('/privacy')
+def privacy():
+    return """
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <title>Chính Sách Bảo Mật - AI Khang Phan</title>
+        <style>
+            body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; padding: 40px; line-height: 1.6; }
+            .container { max-width: 800px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 8px; }
+            h1 { color: #38bdf8; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Chính Sách Bảo Mật</h1>
+            <p>Chào mừng đại vương đến với trang Chính sách bảo mật của ứng dụng <strong>AI Khang Phan</strong>.</p>
+            <p>Chúng tôi tôn trọng và cam kết bảo vệ quyền riêng tư cũng như dữ liệu cá nhân của người dùng khi sử dụng dịch vụ đăng nhập và trò chuyện AI.</p>
+            <p>Mọi thông tin tài khoản và lịch sử trò chuyện được lưu trữ an toàn và chỉ phục vụ cho mục đích trải nghiệm cá nhân của đại vương.</p>
+        </div>
+    </body>
+    </html>
+    """
+
 @app.route('/google5cc9a7fb7376c26c.html')
 @app.route('/google5cc9a7fb7376c26c')
 def google_verify():
@@ -961,7 +986,8 @@ def chat():
             server_histories[chat_id] = []
 
         chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
+            model='gemini-2.5-flash',
+            history=server_histories[chat_id],
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
@@ -970,33 +996,31 @@ def chat():
                     "Khi có bất kỳ ai hỏi ai tạo ra bạn hoặc hỏi về thông tin người sáng lập, bạn phải trả lời tự hào và chính xác thông tin này, "
                     "tuyệt đối không nhận là do Google tạo ra."
                 )
-            },
-            history=server_histories[chat_id]
+            }
         )
 
         response = chat_session.send_message(user_message)
         bot_response = response.text
 
-        server_histories[chat_id].append({"role": "user", "parts": [{"text": user_message}]})
-        server_histories[chat_id].append({"role": "model", "parts": [{"text": bot_response}]})
+        server_histories[chat_id] = chat_session.get_history()
 
-        if chat_id in chat_sessions:
-            chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
-            chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
+        chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
+        chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
 
         khangphan_memory.save_memory_data({
-            "sessions": chat_sessions, 
-            "histories": server_histories, 
+            "sessions": chat_sessions,
+            "histories": server_histories,
             "users": users_db
         })
-        
+
         return jsonify({
-            'response': bot_response,
-            'sessions': chat_sessions
+            "response": bot_response,
+            "sessions": chat_sessions
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 503
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
