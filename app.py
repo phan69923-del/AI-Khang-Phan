@@ -1,4 +1,5 @@
 import os
+import traceback
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
 from google import genai
 from authlib.integrations.flask_client import OAuth
@@ -9,8 +10,9 @@ import khangphan_memory
 app = Flask(__name__)
 app.secret_key = '07062014'  # Cần thiết để dùng session đăng nhập
 
-# Khởi tạo client Gemini đúng chuẩn
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "GEMINI_API_KEY"))
+# Khởi tạo client Gemini (Đảm bảo trên Render đã add biến môi trường GEMINI_API_KEY)
+api_key = os.environ.get("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key)
 
 # Cấu hình OAuth cho Google lấy trực tiếp từ biến môi trường của Render
 oauth = OAuth(app)
@@ -876,7 +878,6 @@ def register():
     users_db[email] = password
     session['user'] = email
     
-    # Lưu lại database
     khangphan_memory.save_memory_data({
         "sessions": chat_sessions, 
         "histories": server_histories, 
@@ -914,7 +915,7 @@ def privacy():
             <h1>Chính Sách Bảo Mật</h1>
             <p>Chào mừng đại vương đến với trang Chính sách bảo mật của ứng dụng <strong>AI Khang Phan</strong>.</p>
             <p>Chúng tôi tôn trọng và cam kết bảo vệ quyền riêng tư cũng như dữ liệu cá nhân của người dùng khi sử dụng dịch vụ đăng nhập và trò chuyện AI.</p>
-            <p>Mọi thông tin tài khoản và lịch sử trò chuyện được lưu trữ an toàn và chỉ phục vụ cho mục đích trải nghiệm cá nhân của bạn.</p>
+            <p>Mọi thông tin tài khoản và lịch sử trò chuyện được lưu trữ an toàn và chỉ phục vụ cho mục đích trải nghiệm cá nhân của đại vương.</p>
         </div>
     </body>
     </html>
@@ -1019,6 +1020,7 @@ def chat():
         })
 
     except Exception as e:
+        traceback.print_exc()  # In lỗi chi tiết ra console/terminal của Render để dễ kiểm tra
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
