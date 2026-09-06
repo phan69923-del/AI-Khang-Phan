@@ -987,7 +987,7 @@ def chat():
             server_histories[chat_id] = []
 
         chat_session = client.chats.create(
-            model='gemini-1.5-flash',
+            model='gemini-3.5-flash-lite',
             history=server_histories[chat_id],
             config={
                 'system_instruction': (
