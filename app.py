@@ -926,47 +926,6 @@ def privacy():
 def google_verify():
     return "google-site-verification: google5cc9a7fb7376c26c.html"
 
-@app.route('/new_chat', methods=['POST'])
-def new_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-        
-    data = request.get_json()
-    chat_id = data.get('chat_id')
-    
-    chat_sessions[chat_id] = {
-        "title": "Cuộc trò chuyện mới",
-        "messages": [{"role": "bot", "text": "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?"}]
-    }
-    server_histories[chat_id] = []
-    
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions, 
-        "histories": server_histories, 
-        "users": users_db
-    })
-    return jsonify({"sessions": chat_sessions})
-
-@app.route('/delete_chat', methods=['POST'])
-def delete_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-        
-    data = request.get_json()
-    chat_id = data.get('chat_id')
-    
-    if chat_id in chat_sessions:
-        del chat_sessions[chat_id]
-    if chat_id in server_histories:
-        del server_histories[chat_id]
-        
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions, 
-        "histories": server_histories, 
-        "users": users_db
-    })
-    return jsonify({"sessions": chat_sessions})
-
 @app.route('/chat', methods=['POST'])
 def chat():
     if 'user' not in session:
@@ -1002,7 +961,14 @@ def chat():
         response = chat_session.send_message(full_message)
         bot_response = response.text
 
-        server_histories[chat_id] = chat_session.get_history()
+        server_histories[chat_id].append({
+            "role": "user",
+            "parts": [{"text": full_message}]
+        })
+        server_histories[chat_id].append({
+            "role": "model",
+            "parts": [{"text": bot_response}]
+        })
 
         chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
         chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
