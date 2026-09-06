@@ -1,20 +1,165 @@
 import os
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
 from google import genai
 
-# Import module bộ nhớ riêng vừa tạo
+# Import module bộ nhớ riêng
 import khangphan_memory
+
 app = Flask(__name__)
+app.secret_key = 'khangphan_secret_key_cuc_ky_bao_mat'  # Cần thiết để dùng session đăng nhập
 
 # Khởi tạo client Gemini
 client = genai.Client(api_key="GEMINI_API_KEY")
 
-# Load bộ nhớ từ file riêng biệt
+# Load bộ nhớ toàn cục từ database
 db = khangphan_memory.load_memory_data()
-chat_sessions = db.get("sessions", {})        # Lưu tiêu đề & tin nhắn hiển thị giao diện
-server_histories = db.get("histories", {})    # Lưu bộ nhớ ngữ cảnh để Gemini nhớ dai
+chat_sessions = db.setdefault("sessions", {})        # Lưu tiêu đề & tin nhắn giao diện
+server_histories = db.setdefault("histories", {})    # Lưu bộ nhớ ngữ cảnh Gemini
+users_db = db.setdefault("users", {})                # Lưu tài khoản đăng ký (email: password)
 
-HTML_TEMPLATE = """
+# ==================== GIAO DIỆN LOGIN / REGISTER ====================
+LOGIN_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI KHANG PHAN - Đăng Nhập</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #0f172a; 
+            color: white; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+        }
+        .card { 
+            background: #1e293b; 
+            padding: 30px; 
+            border-radius: 12px; 
+            width: 320px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+            text-align: center; 
+        }
+        h2 { margin-bottom: 20px; color: #f8fafc; }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            border-radius: 6px; 
+            border: 1px solid #334155; 
+            background: #0f172a; 
+            color: white; 
+            box-sizing: border-box; 
+            outline: none;
+        }
+        input:focus { border-color: #38bdf8; }
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            margin-top: 10px; 
+            border-radius: 6px; 
+            border: none; 
+            background: #2563eb; 
+            color: white; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: 0.2s;
+        }
+        button:hover { background: #1d4ed8; }
+        .btn-google { 
+            background: #ea4335; 
+            margin-top: 15px; 
+            display: block; 
+            text-decoration: none; 
+            padding: 12px; 
+            border-radius: 6px; 
+            color: white; 
+            font-weight: bold; 
+            transition: 0.2s;
+        }
+        .btn-google:hover { background: #d93025; }
+        .toggle { margin-top: 20px; font-size: 14px; color: #94a3b8; cursor: pointer; }
+        .toggle span { color: #38bdf8; text-decoration: underline; }
+        .error { color: #f87171; font-size: 14px; margin-top: 12px; min-height: 18px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2 id="form-title">Đăng Nhập AI</h2>
+    <input type="text" id="email" placeholder="Email / Tên đăng nhập" autocomplete="off">
+    <input type="password" id="password" placeholder="Mật khẩu" onkeypress="handleKeyPress(event)">
+    
+    <button id="submit-btn" onclick="handleSubmit()">Đăng Nhập</button>
+    
+    <a href="/login/google" class="btn-google">Đăng nhập bằng Google</a>
+    
+    <div class="error" id="error-msg"></div>
+
+    <div class="toggle" onclick="toggleForm()">
+        <span id="toggle-text">Chưa có tài khoản? Đăng ký ngay</span>
+    </div>
+</div>
+
+<script>
+    let isRegister = false;
+
+    function toggleForm() {
+        isRegister = !isRegister;
+        document.getElementById('form-title').innerText = isRegister ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập AI';
+        document.getElementById('submit-btn').innerText = isRegister ? 'Đăng Ký' : 'Đăng Nhập';
+        document.getElementById('toggle-text').innerText = isRegister ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký ngay';
+        document.getElementById('error-msg').innerText = '';
+    }
+
+    function handleKeyPress(e) {
+        if (e.key === 'Enter') {
+            handleSubmit();
+        }
+    }
+
+    async function handleSubmit() {
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const errorMsg = document.getElementById('error-msg');
+        
+        if (!email || !password) {
+            errorMsg.innerText = 'Vui lòng nhập đầy đủ thông tin!';
+            return;
+        }
+
+        errorMsg.innerText = 'Đang xử lý...';
+        const endpoint = isRegister ? '/register' : '/login';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, username: email, password })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                window.location.href = data.redirect || '/';
+            } else {
+                errorMsg.innerText = data.error || data.message || 'Có lỗi xảy ra!';
+            }
+        } catch (err) {
+            errorMsg.innerText = 'Lỗi kết nối máy chủ!';
+        }
+    }
+</script>
+
+</body>
+</html>
+"""
+
+# ==================== GIAO DIỆN CHÍNH (CHAT AI) ====================
+CHAT_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -413,9 +558,7 @@ HTML_TEMPLATE = """
             </button>
         </div>
         
-        <div class="chat-history" id="chatHistory">
-            <!-- Lịch sử chat đồng bộ từ file nhớ riêng -->
-        </div>
+        <div class="chat-history" id="chatHistory"></div>
 
         <div class="sidebar-footer">
             <div> Khang Phan WorkSpace </div>
@@ -645,22 +788,67 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# ==================== ROUTE XỬ LÝ FLASK ====================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'GET':
+        return render_template_string(LOGIN_HTML_TEMPLATE)
+    
+    data = request.get_json() or {}
+    email = data.get('email')
+    password = data.get('password')
+    
+    if email in users_db and users_db[email] == password:
+        session['user'] = email
+        return jsonify({"success": True, "redirect": "/"})
+    else:
+        return jsonify({"success": False, "error": "Sai tài khoản hoặc mật khẩu!"}), 401
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json() or {}
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not email or not password:
+        return jsonify({"success": False, "error": "Vui lòng nhập đầy đủ thông tin!"}), 400
+        
+    if email in users_db:
+        return jsonify({"success": False, "error": "Tài khoản này đã tồn tại!"}), 400
+    
+    users_db[email] = password
+    session['user'] = email
+    
+    # Lưu lại database
+    khangphan_memory.save_memory_data({
+        "sessions": chat_sessions, 
+        "histories": server_histories, 
+        "users": users_db
+    })
+    return jsonify({"success": True, "redirect": "/"})
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect('/login')
+
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE, sessions=chat_sessions)
+    if 'user' not in session:
+        return redirect('/login')
+    return render_template_string(CHAT_HTML_TEMPLATE, sessions=chat_sessions)
 
 @app.route('/google5cc9a7fb7376c26c.html')
 @app.route('/google5cc9a7fb7376c26c')
 def google_verify():
     return "google-site-verification: google5cc9a7fb7376c26c.html"
 
-@app.route('/logout')
-def logout():
-    # Tự động chuyển hướng về trang /login khi người dùng bấm đăng xuất
-    return redirect('/login')
-
 @app.route('/new_chat', methods=['POST'])
 def new_chat():
+    if 'user' not in session:
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+        
     data = request.get_json()
     chat_id = data.get('chat_id')
     
@@ -670,11 +858,18 @@ def new_chat():
     }
     server_histories[chat_id] = []
     
-    khangphan_memory.save_memory_data({"sessions": chat_sessions, "histories": server_histories})
+    khangphan_memory.save_memory_data({
+        "sessions": chat_sessions, 
+        "histories": server_histories, 
+        "users": users_db
+    })
     return jsonify({"sessions": chat_sessions})
 
 @app.route('/delete_chat', methods=['POST'])
 def delete_chat():
+    if 'user' not in session:
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+        
     data = request.get_json()
     chat_id = data.get('chat_id')
     
@@ -683,11 +878,18 @@ def delete_chat():
     if chat_id in server_histories:
         del server_histories[chat_id]
         
-    khangphan_memory.save_memory_data({"sessions": chat_sessions, "histories": server_histories})
+    khangphan_memory.save_memory_data({
+        "sessions": chat_sessions, 
+        "histories": server_histories, 
+        "users": users_db
+    })
     return jsonify({"sessions": chat_sessions})
 
 @app.route('/chat', methods=['POST'])
 def chat():
+    if 'user' not in session:
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+        
     try:
         data = request.get_json()
         user_message = data.get('message', '').strip()
@@ -726,8 +928,11 @@ def chat():
             chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
             chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
 
-        # Gọi file riêng để lưu dữ liệu vĩnh cửu
-        khangphan_memory.save_memory_data({"sessions": chat_sessions, "histories": server_histories})
+        khangphan_memory.save_memory_data({
+            "sessions": chat_sessions, 
+            "histories": server_histories, 
+            "users": users_db
+        })
         
         return jsonify({
             'response': bot_response,
