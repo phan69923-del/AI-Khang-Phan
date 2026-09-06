@@ -1,15 +1,14 @@
 import os
 import json
-from flask import Flask, render_template_string, request, redirect, url_for, session
+from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from authlib.integrations.flask_client import OAuth
 from google import genai
 
 app = Flask(__name__)
-# Khóa bí mật cho session của Flask
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan-secret-key-2026")
 
-# --- CẤU HÌNH GOOGLE OAUTH (Tùy chọn, nếu có env thì dùng) ---
+# --- CẤU HÌNH GOOGLE OAUTH ---
 oauth = OAuth(app)
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
@@ -23,9 +22,10 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
         client_kwargs={'scope': 'openid email profile'}
     )
 
-# --- CẤU HÌNH GEMINI API ---
+# --- CẤU HÌNH GEMINI API (Sử dụng gemini-3.5-flash-lite) ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+AI_MODEL_NAME = "gemini-3.5-flash-lite"
 
 # --- QUẢN LÝ BỘ NHỚ LOCAL (JSON) ---
 MEMORY_DIR = "khangphan_memory"
@@ -56,7 +56,7 @@ def save_memory_data(data):
     with open(MEMORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# --- GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ (Nền trắng Google button) ---
+# --- GIAO DIỆN ĐĂNG NHẬP ---
 LOGIN_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -147,8 +147,102 @@ REGISTER_HTML_TEMPLATE = """
 </html>
 """
 
-# --- ROUTES XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ ---
-@app.route('/login', methods=['GET', 'XPOST' if False else 'POST'])
+# --- GIAO DIỆN CHAT AI CHÍNH ---
+CHAT_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Khang's Workspace - Gemini 3.5 Flash-Lite</title>
+    <style>
+        body { background: #0f172a; font-family: 'Segoe UI', sans-serif; color: #f8fafc; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 260px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; padding: 20px; }
+        .sidebar h3 { color: #38bdf8; margin-top: 0; font-size: 18px; }
+        .user-info { margin-top: auto; font-size: 13px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .logout-btn { color: #ef4444; text-decoration: none; font-weight: 600; }
+        .main-chat { flex: 1; display: flex; flex-direction: column; background: #0f172a; }
+        .chat-header { padding: 15px 25px; background: #1e293b; border-bottom: 1px solid #334155; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .message { max-width: 75%; padding: 12px 16px; border-radius: 8px; line-height: 1.5; font-size: 14px; word-wrap: break-word; }
+        .user-msg { background: #2563eb; color: white; align-self: flex-end; }
+        .ai-msg { background: #334155; color: #f8fafc; align-self: flex-start; }
+        .chat-input-area { padding: 20px; background: #1e293b; border-top: 1px solid #334155; display: flex; gap: 10px; }
+        .chat-input-area input { flex: 1; padding: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: white; font-size: 14px; }
+        .chat-input-area input:focus { border-color: #3b82f6; outline: none; }
+        .chat-input-area button { padding: 0 20px; background: #2563eb; border: none; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .chat-input-area button:hover { background: #1d4ed8; }
+        .model-badge { background: #059669; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h3>Workspace của Khang</h3>
+        <p style="font-size: 13px; color: #94a3b8;">Trò chuyện thông minh cùng mô hình mới nhất.</p>
+        <div class="user-info">
+            <span>👤 {{ username }}</span>
+            <a href="/logout" class="logout-btn">Đăng xuất</a>
+        </div>
+    </div>
+    
+    <div class="main-chat">
+        <div class="chat-header">
+            <span>Khang's AI Assistant</span>
+            <span class="model-badge">Gemini 3.5 Flash-Lite</span>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai-msg">Chào sếp! Tôi đang sử dụng mô hình **Gemini 3.5 Flash-Lite**. Sếp cần tôi hỗ trợ việc gì nào?</div>
+        </div>
+        
+        <div class="chat-input-area">
+            <input type="text" id="userInput" placeholder="Nhập tin nhắn của bạn..." autofocus>
+            <button onclick="sendMessage()">Gửi</button>
+        </div>
+    </div>
+
+    <script>
+        const inputField = document.getElementById('userInput');
+        inputField.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        async function sendMessage() {
+            const text = inputField.value.trim();
+            if (!text) return;
+
+            const chatContainer = document.getElementById('chatMessages');
+            
+            // Hiển thị tin nhắn user
+            chatContainer.innerHTML += `<div class="message user-msg">${escapeHtml(text)}</div>`;
+            inputField.value = '';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                const data = await response.json();
+                
+                // Hiển thị phản hồi từ AI
+                chatContainer.innerHTML += `<div class="message ai-msg">${escapeHtml(data.reply || data.error)}</div>`;
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } catch (err) {
+                chatContainer.innerHTML += `<div class="message ai-msg" style="color:#ef4444;">Lỗi kết nối đến máy chủ!</div>`;
+            }
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
+"""
+
+# --- ROUTES XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ / AUTH ---
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
     if request.method == 'POST':
@@ -174,8 +268,7 @@ def register():
         password = request.form.get('password')
         
         data = load_memory_data()
-        if "users" not in data:
-            data["users"] = {}
+        if "users" not in data: data["users"] = {}
             
         if username in data["users"]:
             error = "Tài khoản này đã tồn tại!"
@@ -206,7 +299,7 @@ def google_auth():
         if "users" not in data: data["users"] = {}
         
         if email not in data["users"]:
-            data["users"][email] = generate_password_hash(os.urandom(16).hex()) # Tạo pass ngẫu nhiên cho user gg
+            data["users"][email] = generate_password_hash(os.urandom(16).hex())
             save_memory_data(data)
             
         session['user'] = email
@@ -219,12 +312,33 @@ def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
-# --- TRANG CHỦ CHAT AI (GIAO DIỆN CHÍNH) ---
+# --- TRANG CHỦ & API CHAT GEMINI 3.5 FLASH-LITE ---
 @app.route('/')
 def index():
     if 'user' not in session:
         return redirect(url_for('login'))
-    return f"<h1>Chào mừng sếp {session['user']} đã đến với Khang's Workspace!</h1><p><a href='/logout'>Đăng xuất</a></p>"
+    return render_template_string(CHAT_HTML_TEMPLATE, username=session['user'])
+
+@app.route('/api/chat', methods=['POST'])
+def api_chat():
+    if 'user' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    req_data = request.get_json()
+    user_message = req_data.get('message', '')
+    
+    if not client:
+        return jsonify({"error": "Gemini API Key chưa được thiết lập trên server."})
+    
+    try:
+        # Gọi trực tiếp model gemini-3.5-flash-lite
+        response = client.models.generate_content(
+            model=AI_MODEL_NAME,
+            contents=user_message
+        )
+        return jsonify({"reply": response.text})
+    except Exception as e:
+        return jsonify({"error": f"Lỗi gọi AI: {str(e)}"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
