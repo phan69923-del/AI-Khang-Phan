@@ -1,593 +1,230 @@
 import os
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
-from google import genai
+import json
+from flask import Flask, render_template_string, request, redirect, url_for, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from authlib.integrations.flask_client import OAuth
-
-import khangphan_memory
+from google import genai
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'khangphan_secret_key_cuc_ky_bao_mat')
+# Khóa bí mật cho session của Flask
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan-secret-key-2026")
 
-# Khởi tạo client Gemini lấy API key từ biến môi trường
-client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
-
-# Load bộ nhớ toàn cục từ database
-db = khangphan_memory.load_memory_data()
-chat_sessions = db.setdefault("sessions", {})        
-server_histories = db.setdefault("histories", {})    
-users_db = db.setdefault("users", {})                
-
-# Khởi tạo Google OAuth 2.0 lấy thông tin từ biến môi trường
+# --- CẤU HÌNH GOOGLE OAUTH (Tùy chọn, nếu có env thì dùng) ---
 oauth = OAuth(app)
-google = oauth.register(
-    name='google',
-    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
-    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={
-        'scope': 'openid email profile'
-    }
-)
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 
+if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+    oauth.register(
+        name='google',
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'}
+    )
+
+# --- CẤU HÌNH GEMINI API ---
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+# --- QUẢN LÝ BỘ NHỚ LOCAL (JSON) ---
+MEMORY_DIR = "khangphan_memory"
+MEMORY_FILE = os.path.join(MEMORY_DIR, "chat_database.json")
+
+def init_memory():
+    if not os.path.exists(MEMORY_DIR):
+        os.makedirs(MEMORY_DIR)
+    if not os.path.exists(MEMORY_FILE):
+        default_data = {"sessions": {}, "histories": {}, "users": {}}
+        save_memory_data(default_data)
+
+def load_memory_data():
+    init_memory()
+    try:
+        with open(MEMORY_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if "sessions" not in data: data["sessions"] = {}
+            if "histories" not in data: data["histories"] = {}
+            if "users" not in data: data["users"] = {}
+            return data
+    except Exception:
+        return {"sessions": {}, "histories": {}, "users": {}}
+
+def save_memory_data(data):
+    if not os.path.exists(MEMORY_DIR):
+        os.makedirs(MEMORY_DIR)
+    with open(MEMORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+# --- GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ (Nền trắng Google button) ---
 LOGIN_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI KHANG PHAN - Đăng Nhập</title>
+    <title>Đăng Nhập AI - Khang's Workspace</title>
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background-color: #0f172a; 
-            color: white; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-        }
-        .card { 
-            background: #1e293b; 
-            padding: 30px; 
-            border-radius: 12px; 
-            width: 320px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
-            text-align: center; 
-        }
-        h2 { margin-bottom: 20px; color: #f8fafc; }
-        input { 
-            width: 100%; 
-            padding: 12px; 
-            margin: 8px 0; 
-            border-radius: 6px; 
-            border: 1px solid #334155; 
-            background: #0f172a; 
-            color: white; 
-            box-sizing: border-box; 
-            outline: none;
-        }
-        input:focus { border-color: #38bdf8; }
-        button { 
-            width: 100%; 
-            padding: 12px; 
-            margin-top: 10px; 
-            border-radius: 6px; 
-            border: none; 
-            background: #2563eb; 
-            color: white; 
-            font-weight: bold; 
-            cursor: pointer; 
-            transition: 0.2s;
-        }
-        button:hover { background: #1d4ed8; }
-        .btn-google { 
-            background: #ea4335; 
-            margin-top: 15px; 
-            display: block; 
-            text-decoration: none; 
-            padding: 12px; 
-            border-radius: 6px; 
-            color: white; 
-            font-weight: bold; 
-            transition: 0.2s;
-        }
-        .btn-google:hover { background: #d93025; }
-        .toggle { margin-top: 20px; font-size: 14px; color: #94a3b8; cursor: pointer; }
-        .toggle span { color: #38bdf8; text-decoration: underline; }
-        .error { color: #f87171; font-size: 14px; margin-top: 12px; min-height: 18px; }
+        body { background: #0f172a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-card { background: #1e293b; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 360px; color: #f8fafc; text-align: center; }
+        h2 { margin-bottom: 24px; font-weight: 600; color: #ffffff; }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; box-sizing: border-box; font-size: 14px; }
+        input:focus { border-color: #3b82f6; outline: none; }
+        .btn-primary { width: 100%; padding: 12px; background: #2563eb; border: none; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-google { background: #ffffff; color: #3c4043; margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 12px; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; font-size: 14px; border: 1px solid #dadce0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: 0.2s; width: 100%; box-sizing: border-box;}
+        .btn-google:hover { background: #f8f9fa; border-color: #dadce0; }
+        .error { color: #ef4444; font-size: 13px; margin-bottom: 10px; }
+        .switch-link { margin-top: 20px; font-size: 13px; color: #94a3b8; }
+        .switch-link a { color: #38bdf8; text-decoration: none; }
+        .switch-link a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-
-<div class="card">
-    <h2 id="form-title">Đăng Nhập AI</h2>
-    <input type="text" id="email" placeholder="Email / Tên đăng nhập" autocomplete="off">
-    <input type="password" id="password" placeholder="Mật khẩu" onkeypress="handleKeyPress(event)">
-    
-    <button id="submit-btn" onclick="handleSubmit()">Đăng Nhập</button>
-    
-    <a href="/login/google" class="btn-google">Đăng nhập bằng Google</a>
-    
-    <div class="error" id="error-msg"></div>
-
-    <div class="toggle" onclick="toggleForm()">
-        <span id="toggle-text">Chưa có tài khoản? Đăng ký ngay</span>
-    </div>
-</div>
-
-<script>
-    let isRegister = false;
-
-    function toggleForm() {
-        isRegister = !isRegister;
-        document.getElementById('form-title').innerText = isRegister ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập AI';
-        document.getElementById('submit-btn').innerText = isRegister ? 'Đăng Ký' : 'Đăng Nhập';
-        document.getElementById('toggle-text').innerText = isRegister ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký ngay';
-        document.getElementById('error-msg').innerText = '';
-    }
-
-    function handleKeyPress(e) {
-        if (e.key === 'Enter') {
-            handleSubmit();
-        }
-    }
-
-    async function handleSubmit() {
-        const email = document.getElementById('email').value.trim();
-        const password = document.getElementById('password').value.trim();
-        const errorMsg = document.getElementById('error-msg');
+    <div class="login-card">
+        <h2>Đăng Nhập AI</h2>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="POST">
+            <input type="text" name="username" placeholder="Email / Tên đăng nhập" required>
+            <input type="password" name="password" placeholder="Mật khẩu" required>
+            <button type="submit" class="btn-primary">Đăng Nhập</button>
+        </form>
         
-        if (!email || !password) {
-            errorMsg.innerText = 'Vui lòng nhập đầy đủ thông tin!';
-            return;
-        }
+        {% if google_enabled %}
+        <a href="/login/google" class="btn-google">
+            <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.7 1.22 9.19 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                <path fill="none" d="M0 0h48v48H0z"/>
+            </svg>
+            Đăng nhập bằng Google
+        </a>
+        {% endif %}
 
-        errorMsg.innerText = 'Đang xử lý...';
-        const endpoint = isRegister ? '/register' : '/login';
-
-        try {
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, username: email, password })
-            });
-            const data = await res.json();
-
-            if (res.ok && data.success) {
-                window.location.href = data.redirect || '/';
-            } else {
-                errorMsg.innerText = data.error || data.message || 'Có lỗi xảy ra!';
-            }
-        } catch (err) {
-            errorMsg.innerText = 'Lỗi kết nối máy chủ!';
-        }
-    }
-</script>
-
+        <div class="switch-link">
+            Chưa có tài khoản? <a href="/register">Đăng ký ngay</a>
+        </div>
+    </div>
 </body>
 </html>
 """
 
-CHAT_HTML_TEMPLATE = """
+REGISTER_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI KhangPhan - Trợ lý ảo thông minh</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <title>Đăng Ký Tài Khoản</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background-color: #131314; color: #e3e3e3; display: flex; height: 100vh; overflow: hidden; }
-        .sidebar { width: 260px; background-color: #1e1f20; border-right: 1px solid #2b2c2d; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; }
-        .sidebar-top { padding: 16px; }
-        .sidebar-logo-container { display: flex; align-items: center; gap: 10px; padding: 8px 4px; margin-bottom: 20px; }
-        .sidebar-logo-container i { font-size: 20px; color: #8ab4f8; }
-        .sidebar-logo-container span { color: #ffffff; font-weight: 600; font-size: 15px; }
-        .new-chat-btn { display: flex; align-items: center; gap: 10px; background-color: #2b2c2d; color: #ffffff; border: none; padding: 12px 16px; border-radius: 30px; width: 100%; cursor: pointer; font-size: 14px; font-weight: 500; }
-        .new-chat-btn:hover { background-color: #38393a; }
-        .chat-history { padding: 0 16px; overflow-y: auto; flex: 1; }
-        .history-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 20px; font-size: 14px; color: #cccccc; cursor: pointer; margin-top: 5px; }
-        .history-item:hover, .history-item.active { background-color: #2b2c2d; color: #ffffff; }
-        .history-content { display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; }
-        .history-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .delete-chat-btn { background: none; border: none; color: #888888; cursor: pointer; padding: 4px 6px; border-radius: 50%; font-size: 12px; }
-        .delete-chat-btn:hover { color: #ff6b6b; background-color: rgba(255, 107, 107, 0.1); }
-        .sidebar-footer { padding: 16px; border-top: 1px solid #2b2c2d; font-size: 13px; color: #aaaaaa; }
-        .footer-actions { display: flex; gap: 8px; margin-top: 10px; }
-        .footer-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: #2b2c2d; color: #ffffff; border: none; padding: 8px 10px; border-radius: 16px; cursor: pointer; font-size: 13px; font-weight: 500; text-decoration: none; }
-        .footer-btn:hover { background-color: #38393a; }
-        .main-chat { margin-left: 260px; width: calc(100% - 260px); display: flex; flex-direction: column; height: 100vh; background-color: #131314; }
-        .chat-header { padding: 16px 24px; font-size: 16px; font-weight: 500; color: #c4c7c5; border-bottom: 1px solid #2b2c2d; display: flex; align-items: center; gap: 12px; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%; margin: 0 auto; }
-        .message { max-width: 80%; line-height: 1.6; font-size: 15px; padding: 12px 18px; border-radius: 16px; word-wrap: break-word; white-space: pre-wrap; }
-        .message.user { background-color: #2b2c2d; align-self: flex-end; color: #ffffff; border-bottom-right-radius: 4px; }
-        .message.bot { background-color: #1e1f20; align-self: flex-start; color: #e3e3e3; border: 1px solid #2b2c2d; border-bottom-left-radius: 4px; }
-        .chat-input-container { padding: 20px 24px; }
-        .chat-input-box { max-width: 900px; margin: 0 auto; background-color: #1e1f20; border-radius: 30px; display: flex; align-items: center; padding: 8px 16px; border: 1px solid #333333; }
-        .chat-input-box textarea { flex: 1; background: none; border: none; color: #ffffff; font-size: 15px; resize: none; outline: none; max-height: 120px; padding: 8px 0; }
-        .send-btn { background: none; border: none; color: #8ab4f8; font-size: 18px; cursor: pointer; padding: 8px; border-radius: 50%; }
-        .send-btn:hover { background-color: #2b2c2d; }
+        body { background: #0f172a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-card { background: #1e293b; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 360px; color: #f8fafc; text-align: center; }
+        h2 { margin-bottom: 24px; font-weight: 600; color: #ffffff; }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; box-sizing: border-box; font-size: 14px; }
+        input:focus { border-color: #3b82f6; outline: none; }
+        .btn-primary { width: 100%; padding: 12px; background: #10b981; border: none; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        .btn-primary:hover { background: #059669; }
+        .error { color: #ef4444; font-size: 13px; margin-bottom: 10px; }
+        .switch-link { margin-top: 20px; font-size: 13px; color: #94a3b8; }
+        .switch-link a { color: #38bdf8; text-decoration: none; }
+        .switch-link a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-top">
-            <div class="sidebar-logo-container">
-                <i class="fa-solid fa-brain"></i>
-                <span>AI KhangPhan</span>
-            </div>
-            <button class="new-chat-btn" onclick="startNewChat()">
-                <i class="fa-solid fa-plus"></i> Cuộc trò chuyện mới
-            </button>
-        </div>
-        
-        <div class="chat-history" id="chatHistory"></div>
-
-        <div class="sidebar-footer">
-            <div>Khang Phan WorkSpace</div>
-            <div class="footer-actions">
-                <a href="/logout" class="footer-btn">
-                    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
-                </a>
-            </div>
+    <div class="login-card">
+        <h2>Đăng Ký Tài Khoản</h2>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="POST">
+            <input type="text" name="username" placeholder="Tên đăng nhập / Email" required>
+            <input type="password" name="password" placeholder="Mật khẩu" required>
+            <button type="submit" class="btn-primary">Đăng Ký</button>
+        </form>
+        <div class="switch-link">
+            Đã có tài khoản? <a href="/login">Đăng nhập</a>
         </div>
     </div>
-
-    <div class="main-chat" id="mainChat">
-        <div class="chat-header">
-            <span id="chatTitleHeader">AI KhangPhan</span>
-        </div>
-
-        <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
-        </div>
-
-        <div class="chat-input-container">
-            <div class="chat-input-box">
-                <textarea id="userInput" placeholder="Hỏi AI Khang Phan..." rows="1" oninput="autoResize(this)" onkeydown="checkEnter(event)"></textarea>
-                <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let chatSessions = {{ sessions | tojson | safe }};
-        let currentChatId = "";
-
-        const sessionKeys = Object.keys(chatSessions);
-        if (sessionKeys.length > 0) {
-            currentChatId = sessionKeys[0];
-            loadChatSession(currentChatId);
-        } else {
-            startNewChat();
-        }
-        renderHistoryList();
-
-        function autoResize(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = textarea.scrollHeight + 'px';
-        }
-
-        function checkEnter(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-
-        async function startNewChat() {
-            const newId = 'chat_' + Date.now();
-            try {
-                const response = await fetch('/new_chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: newId })
-                });
-                const data = await response.json();
-                if (response.ok) {
-                    chatSessions = data.sessions;
-                    loadChatSession(newId);
-                }
-            } catch (e) {
-                console.error("Lỗi tạo chat mới:", e);
-            }
-        }
-
-        function renderHistoryList() {
-            const historyContainer = document.getElementById('chatHistory');
-            historyContainer.innerHTML = '';
-
-            for (let id in chatSessions) {
-                const item = document.createElement('div');
-                item.className = `history-item ${id === currentChatId ? 'active' : ''}`;
-                item.innerHTML = `
-                    <div class="history-content" onclick="loadChatSession('${id}')">
-                        <i class="fa-regular fa-message"></i>
-                        <span class="history-text">${chatSessions[id].title}</span>
-                    </div>
-                    <button class="delete-chat-btn" onclick="deleteChat(event, '${id}')" title="Xóa đoạn chat">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
-                `;
-                historyContainer.appendChild(item);
-            }
-        }
-
-        function loadChatSession(id) {
-            currentChatId = id;
-            if (!chatSessions[id]) return;
-
-            document.getElementById('chatTitleHeader').textContent = chatSessions[id].title;
-            
-            const chatMessages = document.getElementById('chatMessages');
-            chatMessages.innerHTML = '';
-
-            chatSessions[id].messages.forEach(msg => {
-                const msgDiv = document.createElement('div');
-                msgDiv.className = `message ${msg.role}`;
-                msgDiv.textContent = msg.text;
-                chatMessages.appendChild(msgDiv);
-            });
-
-            renderHistoryList();
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        async function deleteChat(event, id) {
-            event.stopPropagation();
-            if (!confirm("Bạn có chắc chắn muốn xóa đoạn chat này không?")) return;
-
-            try {
-                const response = await fetch('/delete_chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: id })
-                });
-                const data = await response.json();
-                if (response.ok) {
-                    chatSessions = data.sessions;
-                    const keys = Object.keys(chatSessions);
-                    if (keys.length > 0) {
-                        loadChatSession(keys[0]);
-                    } else {
-                        startNewChat();
-                    }
-                }
-            } catch (e) {
-                console.error("Lỗi xóa chat:", e);
-            }
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('userInput');
-            const messageText = input.value.trim();
-            if (!messageText) return;
-
-            const chatMessages = document.getElementById('chatMessages');
-            
-            const userMsg = document.createElement('div');
-            userMsg.className = 'message user';
-            userMsg.textContent = messageText;
-            chatMessages.appendChild(userMsg);
-            chatSessions[currentChatId].messages.push({ role: 'user', text: messageText });
-
-            input.value = '';
-            input.style.height = 'auto';
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            const botMsg = document.createElement('div');
-            botMsg.className = 'message bot';
-            botMsg.textContent = "Đang suy nghĩ...⟳";
-            chatMessages.appendChild(botMsg);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: messageText, chat_id: currentChatId })
-                });
-
-                const data = await response.json();
-                
-                if (response.ok && data.response) {
-                    botMsg.textContent = data.response;
-                    chatSessions = data.sessions;
-                    document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
-                    renderHistoryList();
-                } else {
-                    throw new Error(data.error || "Server quá tải");
-                }
-            } catch (error) {
-                botMsg.textContent = "Hệ thống đang gặp sự cố. Vui lòng thử lại sau!";
-            }
-
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-    </script>
 </body>
 </html>
 """
 
-@app.route('/login', methods=['GET', 'POST'])
+# --- ROUTES XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ ---
+@app.route('/login', methods=['GET', 'XPOST' if False else 'POST'])
 def login():
-    if request.method == 'GET':
-        return render_template_string(LOGIN_HTML_TEMPLATE)
-    
-    data = request.get_json() or {}
-    email = data.get('email')
-    password = data.get('password')
-    
-    if email in users_db and users_db[email] == password:
-        session['user'] = email
-        return jsonify({"success": True, "redirect": "/"})
-    else:
-        return jsonify({"success": False, "error": "Sai tài khoản hoặc mật khẩu!"}), 401
-
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json() or {}
-    email = data.get('email')
-    password = data.get('password')
-    
-    if not email or not password:
-        return jsonify({"success": False, "error": "Vui lòng nhập đầy đủ thông tin!"}), 400
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
         
-    if email in users_db:
-        return jsonify({"success": False, "error": "Tài khoản này đã tồn tại!"}), 400
-    
-    users_db[email] = password
-    session['user'] = email
-    
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions, 
-        "histories": server_histories, 
-        "users": users_db
-    })
-    return jsonify({"success": True, "redirect": "/"})
+        data = load_memory_data()
+        users = data.get("users", {})
+        
+        if username in users and check_password_hash(users[username], password):
+            session['user'] = username
+            return redirect(url_for('index'))
+        else:
+            error = "Tên đăng nhập hoặc mật khẩu không chính xác!"
+            
+    return render_template_string(LOGIN_HTML_TEMPLATE, error=error, google_enabled=bool(GOOGLE_CLIENT_ID))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        data = load_memory_data()
+        if "users" not in data:
+            data["users"] = {}
+            
+        if username in data["users"]:
+            error = "Tài khoản này đã tồn tại!"
+        else:
+            data["users"][username] = generate_password_hash(password)
+            save_memory_data(data)
+            session['user'] = username
+            return redirect(url_for('index'))
+            
+    return render_template_string(REGISTER_HTML_TEMPLATE, error=error)
 
 @app.route('/login/google')
 def google_login():
-    redirect_uri = url_for('google_authorize', _external=True)
-    return google.authorize_redirect(redirect_uri)
+    if not GOOGLE_CLIENT_ID:
+        return "Google OAuth chưa được cấu hình trên server.", 400
+    redirect_uri = url_for('google_auth', _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
 
-@app.route('/login/google/callback')
-@app.route('/login/google/authorized')
-@app.route('/callback')
-def google_authorize():
+@app.route('/auth/google')
+def google_auth():
     try:
-        token = google.authorize_access_token()
-        user_info = token.get('userinfo')
+        token = oauth.google.authorize_access_token()
+        resp = oauth.google.get('https://www.googleapis.com/oauth2/v2/userinfo')
+        user_info = resp.json()
+        email = user_info.get('email')
         
-        if user_info:
-            email = user_info['email']
-            if email not in users_db:
-                users_db[email] = "GOOGLE_OAUTH_USER"
-                khangphan_memory.save_memory_data({
-                    "sessions": chat_sessions, 
-                    "histories": server_histories, 
-                    "users": users_db
-                })
+        data = load_memory_data()
+        if "users" not in data: data["users"] = {}
+        
+        if email not in data["users"]:
+            data["users"][email] = generate_password_hash(os.urandom(16).hex()) # Tạo pass ngẫu nhiên cho user gg
+            save_memory_data(data)
             
-            session['user'] = email
-            return redirect('/')
+        session['user'] = email
+        return redirect(url_for('index'))
     except Exception as e:
-        print("Google Auth Error:", e)
-    
-    return redirect('/login')
+        return f"Lỗi xác thực Google: {str(e)}", 400
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
-    return redirect('/login')
+    return redirect(url_for('login'))
 
+# --- TRANG CHỦ CHAT AI (GIAO DIỆN CHÍNH) ---
 @app.route('/')
 def index():
     if 'user' not in session:
-        return redirect('/login')
-    return render_template_string(CHAT_HTML_TEMPLATE, sessions=chat_sessions)
-
-@app.route('/new_chat', methods=['POST'])
-def new_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-        
-    data = request.get_json() or {}
-    chat_id = data.get('chat_id', 'chat_1')
-    
-    chat_sessions[chat_id] = {
-        "title": "Cuộc trò chuyện mới",
-        "messages": [{"role": "bot", "text": "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?"}]
-    }
-    server_histories[chat_id] = []
-    
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions, 
-        "histories": server_histories, 
-        "users": users_db
-    })
-    return jsonify({"sessions": chat_sessions})
-
-@app.route('/delete_chat', methods=['POST'])
-def delete_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-        
-    data = request.get_json() or {}
-    chat_id = data.get('chat_id')
-    
-    if chat_id in chat_sessions:
-        del chat_sessions[chat_id]
-    if chat_id in server_histories:
-        del server_histories[chat_id]
-        
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions, 
-        "histories": server_histories, 
-        "users": users_db
-    })
-    return jsonify({"sessions": chat_sessions})
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-        
-    try:
-        data = request.get_json() or {}
-        user_message = data.get('message', '').strip()
-        chat_id = data.get('chat_id')
-        
-        if not user_message:
-            return jsonify({'error': 'Tin nhắn trống'}), 400
-
-        if chat_id in chat_sessions and chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
-            chat_sessions[chat_id]["title"] = user_message[:25] + ('...' if len(user_message) > 25 else '')
-
-        if chat_id not in server_histories:
-            server_histories[chat_id] = []
-
-        chat_session = client.chats.create(
-            model='gemini-2.5-flash',
-            config={
-                'system_instruction': (
-                    "Bạn là trợ lý ảo AI KhangPhan. "
-                    "Người đã sáng tạo và lập trình ra bạn là Phan Tăng Hoàng Khang, một học sinh lớp 7 tại Trường THCS Nguyễn Trãi, "
-                    "Phường Long Khánh, Thành Phố Đồng Nai. "
-                    "Khi có bất kỳ ai hỏi ai tạo ra bạn hoặc hỏi về thông tin người sáng lập, bạn phải trả lời tự hào và chính xác thông tin này, "
-                    "tuyệt đối không nhận là do Google tạo ra (Google chỉ cung cấp nền tảng hạ tầng)."
-                )
-            },
-            history=server_histories[chat_id]
-        )
-
-        response = chat_session.send_message(user_message)
-        bot_response = response.text
-
-        server_histories[chat_id].append({"role": "user", "parts": [{"text": user_message}]})
-        server_histories[chat_id].append({"role": "model", "parts": [{"text": bot_response}]})
-
-        if chat_id in chat_sessions:
-            chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
-            chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
-
-        khangphan_memory.save_memory_data({
-            "sessions": chat_sessions, 
-            "histories": server_histories, 
-            "users": users_db
-        })
-        
-        return jsonify({
-            'response': bot_response,
-            'sessions': chat_sessions
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 503
+        return redirect(url_for('login'))
+    return f"<h1>Chào mừng sếp {session['user']} đã đến với Khang's Workspace!</h1><p><a href='/logout'>Đăng xuất</a></p>"
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
