@@ -959,10 +959,10 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
-        chat_session = client.chats.create(
+      chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
-            config=genai.types.ChatConfig(
-                system_instruction=(
+            config={
+                'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
                     "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
                     "Tuyệt đối không nhận là do Google tạo ra. "
@@ -970,10 +970,9 @@ def chat():
                     "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
                     "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
                 )
-            ),
+            },
             history=server_histories[chat_id]
         )
-
         response = chat_session.send_message(user_message)
         bot_response = response.text
 
