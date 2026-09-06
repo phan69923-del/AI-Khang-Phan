@@ -986,9 +986,8 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
-        # Gọi Gemini bằng cấu hình tối ưu trực tiếp
-       chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
+        chat_session = client.chats.create(
+            model='gemini-1.5-flash',
             history=server_histories[chat_id],
             config={
                 'system_instruction': (
@@ -1003,6 +1002,12 @@ def chat():
                 )
             }
         )
+
+        response = chat_session.send_message(user_message)
+        bot_response = response.text
+
+        server_histories[chat_id] = chat_session.get_history()
+
         chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
         chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
 
