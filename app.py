@@ -988,7 +988,7 @@ def chat():
 
         # Gọi Gemini bằng cấu hình tối ưu trực tiếp
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.5-flash-lite',
             contents=user_message,
             config={
                 'system_instruction': (
