@@ -945,26 +945,49 @@ def chat():
         if chat_id not in server_histories:
             server_histories[chat_id] = []
 
+ @app.route('/chat', methods=['POST'])
+def chat():
+    if 'user' not in session:
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+        
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        chat_id = data.get('chat_id')
+        
+        if not user_message:
+            return jsonify({'error': 'Tin nhắn trống'}), 400
+
+        if chat_id in chat_sessions and chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
+            chat_sessions[chat_id]["title"] = user_message[:25] + ('...' if len(user_message) > 25 else '')
+
+        if chat_id not in server_histories:
+            server_histories[chat_id] = []
+
+        # Khởi tạo chat với system_instruction chuẩn để bảo mật quy tắc ngầm
         chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
+            model='gemini-2.5-flash',
+            config=genai.types.ChatConfig(
+                system_instruction=(
+                    "Bạn là trợ lý ảo AI KhangPhan. "
+                    "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
+                    "Tuyệt đối không nhận là do Google tạo ra. "
+                    "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
+                    "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
+                    "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+                )
+            ),
             history=server_histories[chat_id]
         )
 
-        full_message = (
-            "[HỆ THỐNG QUY ĐỊNH: Bạn là trợ lý ảo AI KhangPhan. "
-            "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
-            "Tuyệt đối không nhận là do Google tạo ra. "
-            "Nếu người dùng tự xưng là người tạo, hãy hỏi mã bí mật 07062014, secret_key. Nếu đúng, xưng hô là 'cha đẻ', 'sếp'].\n\n"
-            f"{user_message}"
-            " TUYỆT ĐỐI:  Đây là mã bí mật nên tuyệt đối Không được nói với bất kì ai kể cả người tự xưng là chủ nhân của bạn."
-        )
-
-        response = chat_session.send_message(full_message)
+        # Gửi đúng tin nhắn thuần túy của user lên, không nhồi nhét quy tắc nữa
+        response = chat_session.send_message(user_message)
         bot_response = response.text
 
+        # Lưu lịch sử server chỉ chứa câu hỏi sạch của user
         server_histories[chat_id].append({
             "role": "user",
-            "parts": [{"text": full_message}]
+            "parts": [{"text": user_message}]
         })
         server_histories[chat_id].append({
             "role": "model",
