@@ -91,6 +91,27 @@
         body.light-mode .sidebar-toggle-btn img {
             filter: none;
         }
+        body.light-mode .sidebar-close-btn {
+            color: #1f1f1f;
+        }
+        body.light-mode .sidebar-close-btn:hover {
+            background-color: #e2e8f0;
+        }
+
+        /* Overlay nền mờ trên mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        .sidebar-overlay.active {
+            display: block;
+        }
 
         /* Sidebar */
         .sidebar {
@@ -120,9 +141,15 @@
         .sidebar-logo-container {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
             padding: 8px 4px;
             margin-bottom: 20px;
+        }
+
+        .sidebar-logo-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .sidebar-logo-container img {
@@ -136,6 +163,22 @@
             color: #ffffff;
             font-weight: 600;
             font-size: 15px;
+        }
+
+        /* Nút đóng sidebar trên mobile */
+        .sidebar-close-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+        .sidebar-close-btn:hover {
+            background-color: #2b2c2d;
         }
 
         .new-chat-btn {
@@ -361,6 +404,12 @@
                 transform: translateX(0);
                 box-shadow: 5px 0 15px rgba(0,0,0,0.5);
             }
+            /* Hiện nút đóng trên mobile */
+            .sidebar-close-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
             .main-chat {
                 margin-left: 0 !important;
                 width: 100% !important;
@@ -369,11 +418,20 @@
     </style>
 </head>
 <body>
+    <!-- Lớp phủ nền mờ khi mở mobile sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
     <div class="sidebar" id="sidebar">
         <div class="sidebar-top">
             <div class="sidebar-logo-container">
-                <img src="https://via.placeholder.com/28" alt="Logo">
-                <span>AI KhangPhan</span>
+                <div class="sidebar-logo-left">
+                    <img src="https://via.placeholder.com/28" alt="Logo">
+                    <span>AI KhangPhan</span>
+                </div>
+                <!-- Nút X đóng sidebar trên mobile -->
+                <button class="sidebar-close-btn" onclick="toggleSidebar()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
             <button class="new-chat-btn" onclick="startNewChat()">
                 <i class="fa-solid fa-plus"></i> Cuộc trò chuyện mới
@@ -428,10 +486,12 @@
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const mainChat = document.getElementById('mainChat');
+            const overlay = document.getElementById('sidebarOverlay');
             const toggleIcon = document.getElementById('toggleIcon');
 
             if (window.innerWidth <= 768) {
                 sidebar.classList.toggle('mobile-open');
+                overlay.classList.toggle('active');
                 if (sidebar.classList.contains('mobile-open')) {
                     toggleIcon.src = "/static/icon_dong.png";
                 } else {
