@@ -848,143 +848,70 @@ CHAT_HTML_TEMPLATE = """
 
 # ==================== ROUTE XỬ LÝ FLASK ====================
 
+from flask import Flask, render_template, request, jsonify, session
+import os
+import json
+from google import genai
+import traceback
+
+app = Flask(__name__)
+app.secret_key = "secret_key"
+
+# Khởi tạo client Gemini API
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+DB_FILE = "database.json"
+
+def load_db():
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_db():
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(user_sessions, f, ensure_ascii=False, indent=4)
+
+user_sessions = load_db()
+user_histories = {}
+
+for chat_id, data in user_sessions.items():
+    user_histories[chat_id] = []
+    for msg in data.get("messages", []):
+        role = "user" if msg["role"] == "user" else "model"
+        user_histories[chat_id].append({
+            "role": role,
+            "parts": [{"text": msg["text"]}]
+        })
+
 @app.route('/')
 def index():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    user_sessions = get_current_user_sessions()
-    return render_template_string(CHAT_HTML_TEMPLATE, sessions=user_sessions)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'GET':
-        return render_template_string(LOGIN_HTML_TEMPLATE)
-    
-    data = request.get_json() or {}
-    email = data.get('email')
-    password = data.get('password')
-    
-    if email in users_db and users_db[email] == password:
-        session['user'] = email
-        return jsonify({"success": True, "redirect": "/"})
-    else:
-        return jsonify({"success": False, "error": "Sai tài khoản hoặc mật khẩu!"}), 401
-
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json() or {}
-    email = data.get('email')
-    password = data.get('password')
-    
-    if not email or not password:
-        return jsonify({"success": False, "error": "Vui lòng nhập đầy đủ thông tin!"}), 400
-        
-    if email in users_db:
-        return jsonify({"success": False, "error": "Tài khoản đã tồn tại!"}), 400
-        
-    users_db[email] = password
-    session['user'] = email
-    
-    # Khởi tạo vùng nhớ rỗng cho user mới
-    get_current_user_sessions()
-    get_current_user_histories()
-    save_db()
-    
-    return jsonify({"success": True, "redirect": "/"})
-
-@app.route('/logout')
-def logout():
-    session.pop('user', None)
-    return redirect(url_for('login'))
-
-@app.route('/new_chat', methods=['POST'])
-def new_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-    
-    data = request.get_json() or {}
-    chat_id = data.get('chat_id') or f"chat_{os.urandom(4).hex()}"
-    
-    user_sessions = get_current_user_sessions()
-    user_histories = get_current_user_histories()
-    
-    user_sessions[chat_id] = {
-        "title": "Cuộc trò chuyện mới",
-        "messages": []
-    }
-    user_histories[chat_id] = []
-    
-    save_db()
-    
-    return jsonify({"sessions": user_sessions, "chat_id": chat_id})
-
-@app.route('/delete_chat', methods=['POST'])
-def delete_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-        
-    data = request.get_json() or {}
-    chat_id = data.get('chat_id')
-    
-    user_sessions = get_current_user_sessions()
-    user_histories = get_current_user_histories()
-    
-    if chat_id in user_sessions:
-        del user_sessions[chat_id]
-    if chat_id in user_histories:
-        del user_histories[chat_id]
-        
-    save_db()
-    
-    return jsonify({"sessions": user_sessions})
-
-# ==================== ROUTE GOOGLE OAUTH ====================
-@app.route('/login/google')
-def google_login():
-    redirect_uri = url_for('google_auth', _external=True)
-    return google.authorize_redirect(redirect_uri)
-
-@app.route('/login/google/callback')
-def google_auth():
-    token = google.authorize_access_token()
-    user_info = token.get('userinfo')
-    if user_info:
-        email = user_info['email']
-        session['user'] = email
-        if email not in users_db:
-            users_db[email] = "GOOGLE_OAUTH_USER"
-        
-        # Đảm bảo khởi tạo cấu trúc dữ liệu nếu user lần đầu đăng nhập Google
-        get_current_user_sessions()
-        get_current_user_histories()
-        save_db()
-        
-        return redirect('/')
-    return redirect('/login')
+    return render_template('index.html', sessions=user_sessions)
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Chưa đăng nhập'}), 401
-        
     try:
-        data = request.get_json()
-        user_message = data.get('message', '').strip()
-        chat_id = data.get('chat_id')
-        
-        if not user_message:
-            return jsonify({'error': 'Tin nhắn trống'}), 400
+        data = request.json
+        chat_id = data.get("chat_id")
+        user_message = data.get("message")
 
-        user_sessions = get_current_user_sessions()
-        user_histories = get_current_user_histories()
+        if not chat_id or not user_message:
+            return jsonify({"error": "Thiếu thông tin chat_id hoặc message"}), 400
+
+        if chat_id not in user_sessions:
+            user_sessions[chat_id] = {
+                "title": "Cuộc trò chuyện mới",
+                "messages": []
+            }
+            user_histories[chat_id] = []
 
         if chat_id not in user_histories:
             user_histories[chat_id] = []
 
-        if chat_id not in user_sessions:
-            user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
-
-        # CHỈ ĐỔI TÊN ĐÚNG 1 LẦN DUY NHẤT NẾU ĐANG LÀ "Cuộc trò chuyện mới"
+        # Tự động tạo tiêu đề nếu là cuộc trò chuyện mới
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_response = client.models.generate_content(
@@ -1029,12 +956,12 @@ def chat():
 
         save_db()
 
-return jsonify({
+        return jsonify({
             "response": bot_response,
             "sessions": user_sessions
         })
 
-    except Exception as e:  # <-- Phải đặt lùi ra ngoài, thẳng hàng với chữ `try:` ở đầu hàm chat() (4 khoảng trắng)
+    except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
@@ -1062,6 +989,9 @@ def terms_of_service():
 </body>
 </html>
 """
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
