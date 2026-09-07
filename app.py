@@ -7,14 +7,17 @@ from google import genai
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan_secret_key_2026")
 
-# Khởi tạo client Gemini (sử dụng biến môi trường GEMINI_API_KEY)
-client = genai.Client()
+# Khởi tạo client Gemini an toàn
+try:
+    client = genai.Client()
+    print("Khởi tạo Gemini Client thành công!")
+except Exception as e:
+    print(f"Lỗi khởi tạo Gemini Client: {e}")
+    client = None
 
 DB_FILE = "chat_database.json"
 
-# Cấu trúc lưu trữ: { chat_id: { "title": "...", "messages": [...] } }
 user_sessions = {}
-# Lưu lịch sử thô để gửi cho Gemini chat API: { chat_id: [ { "role": "user", "parts": [...] }, ... ] }
 user_histories = {}
 
 def load_db():
@@ -25,7 +28,6 @@ def load_db():
                 data = json.load(f)
                 user_sessions = data.get("sessions", {})
                 raw_histories = data.get("histories", {})
-                # Phục hồi cấu trúc history chuẩn của Gemini SDK
                 user_histories = {}
                 for cid, h_list in raw_histories.items():
                     user_histories[cid] = []
@@ -34,6 +36,7 @@ def load_db():
                             "role": item.get("role"),
                             "parts": [{"text": p.get("text")} for p in item.get("parts", [])]
                         })
+            print("Đã tải cơ sở dữ liệu thành công.")
         except Exception as e:
             print(f"Lỗi đọc cơ sở dữ liệu: {e}")
             user_sessions = {}
@@ -50,10 +53,8 @@ def save_db():
     except Exception as e:
         print(f"Lỗi lưu cơ sở dữ liệu: {e}")
 
-# Tải dữ liệu khi khởi động ứng dụng
 load_db()
 
-# Giao diện HTML + CSS + JavaScript đầy đủ
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -78,52 +79,33 @@ HTML_TEMPLATE = """
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); display: flex; height: 100vh; overflow: hidden; }
-        
-        /* Sidebar */
-        .sidebar { width: 280px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; height: 100%; transition: transform 0.3s ease; }
+        .sidebar { width: 280px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; height: 100%; }
         .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; }
         .new-chat-btn { background-color: var(--accent-color); color: #0f172a; border: none; padding: 10px 15px; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s; }
         .new-chat-btn:hover { background-color: var(--accent-hover); }
-        
         .session-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
         .session-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; color: var(--text-secondary); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: all 0.2s; }
         .session-item:hover { background-color: rgba(255,255,255,0.05); color: var(--text-color); }
         .session-item.active { background-color: rgba(56, 189, 248, 0.15); color: var(--accent-color); font-weight: 500; }
-        
         .sidebar-footer { padding: 15px 20px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; }
         .sidebar-footer a { color: var(--text-secondary); text-decoration: none; }
         .sidebar-footer a:hover { color: var(--accent-color); text-decoration: underline; }
-
-        /* Main Chat Area */
         .main-chat { flex: 1; display: flex; flex-direction: column; height: 100%; background-color: var(--chat-bg); }
-        .chat-header { padding: 15px 25px; border-bottom: 1px solid var(--border-color); background-color: var(--sidebar-bg); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
-        
+        .chat-header { padding: 15px 25px; border-bottom: 1px solid var(--border-color); background-color: var(--sidebar-bg); font-size: 16px; font-weight: 600; }
         .chat-messages { flex: 1; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
-        
         .message { max-width: 75%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; font-size: 15px; word-wrap: break-word; }
         .message.user { background-color: var(--user-bubble); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
         .message.bot { background-color: var(--bot-bubble); color: var(--text-color); align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid var(--border-color); }
-        
-        .message p { margin-bottom: 8px; }
-        .message p:last-child { margin-bottom: 0; }
         .message pre { background: #090d16; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
-        .message code { font-family: Consolas, Monaco, monospace; font-size: 13px; }
-
         .chat-input-container { padding: 20px 25px; background-color: var(--sidebar-bg); border-top: 1px solid var(--border-color); }
-        .chat-input-wrapper { display: flex; background-color: var(--input-bg); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; transition: border-color 0.2s; }
-        .chat-input-wrapper:focus-within { border-color: var(--accent-color); }
-        
+        .chat-input-wrapper { display: flex; background-color: var(--input-bg); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
         textarea { flex: 1; background: transparent; border: none; padding: 12px 15px; color: var(--text-color); font-size: 15px; resize: none; max-height: 150px; outline: none; font-family: inherit; }
-        .send-btn { background-color: transparent; border: none; color: var(--accent-color); padding: 0 15px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: color 0.2s; }
-        .send-btn:hover { color: var(--accent-hover); }
-
+        .send-btn { background-color: transparent; border: none; color: var(--accent-color); padding: 0 15px; cursor: pointer; font-size: 18px; }
         .welcome-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); text-align: center; gap: 10px; }
         .welcome-screen h2 { color: var(--text-color); font-size: 24px; }
     </style>
 </head>
 <body>
-
-    <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">
             <h2 style="color: var(--accent-color); font-size: 18px;">KhangPhan AI</h2>
@@ -132,24 +114,17 @@ HTML_TEMPLATE = """
         <div class="session-list" id="sessionList"></div>
         <div class="sidebar-footer">
             <span>&copy; 2026 KhangPhan</span>
-            <div>
-                <a href="/terms" target="_blank">Điều khoản</a> &bull; 
-                <a href="/privacy" target="_blank">Bảo mật</a>
-            </div>
+            <div><a href="/terms" target="_blank">Điều khoản</a> &bull; <a href="/privacy" target="_blank">Bảo mật</a></div>
         </div>
     </div>
-
-    <!-- Main Chat -->
     <div class="main-chat">
         <div class="chat-header" id="chatHeader">Trợ lý ảo KhangPhan</div>
-        
         <div class="chat-messages" id="chatMessages">
             <div class="welcome-screen">
                 <h2>Xin chào! Tôi có thể giúp gì cho bạn hôm nay?</h2>
                 <p>Hãy nhắn gì đó để bắt đầu cuộc trò chuyện với trợ lý ảo KhangPhan.</p>
             </div>
         </div>
-
         <div class="chat-input-container">
             <div class="chat-input-wrapper">
                 <textarea id="userInput" placeholder="Nhắn tin cho KhangPhan..." rows="1" onkeydown="handleKeyPress(event)"></textarea>
@@ -157,21 +132,17 @@ HTML_TEMPLATE = """
             </div>
         </div>
     </div>
-
     <script>
         let sessions = {{ sessions|tojson }};
         let currentChatId = "{{ current_chat_id }}";
-
         function renderSessions() {
             const listEl = document.getElementById('sessionList');
             listEl.innerHTML = '';
-            
             const sortedIds = Object.keys(sessions).reverse();
             if (sortedIds.length === 0) {
                 listEl.innerHTML = '<div style="padding: 10px; color: #64748b; font-size: 13px; text-align: center;">Chưa có lịch sử</div>';
                 return;
             }
-
             sortedIds.forEach(id => {
                 const session = sessions[id];
                 const div = document.createElement('div');
@@ -181,28 +152,18 @@ HTML_TEMPLATE = """
                 listEl.appendChild(div);
             });
         }
-
         function renderMessages() {
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = '';
-
             if (!sessions[currentChatId] || sessions[currentChatId].messages.length === 0) {
-                chatMessages.innerHTML = `
-                    <div class="welcome-screen">
-                        <h2>Xin chào! Tôi có thể giúp gì cho bạn hôm nay?</h2>
-                        <p>Hãy nhắn gì đó để bắt đầu cuộc trò chuyện với trợ lý ảo KhangPhan.</p>
-                    </div>
-                `;
+                chatMessages.innerHTML = `<div class="welcome-screen"><h2>Xin chào! Tôi có thể giúp gì cho bạn hôm nay?</h2><p>Hãy nhắn gì đó để bắt đầu cuộc trò chuyện với trợ lý ảo KhangPhan.</p></div>`;
                 document.getElementById('chatHeader').innerText = "Trợ lý ảo KhangPhan";
                 return;
             }
-
             document.getElementById('chatHeader').innerText = sessions[currentChatId].title || "Trợ lý ảo KhangPhan";
-
             sessions[currentChatId].messages.forEach(msg => {
                 const msgDiv = document.createElement('div');
                 msgDiv.className = `message ${msg.role === 'user' ? 'user' : 'bot'}`;
-                
                 if (msg.role === 'bot') {
                     msgDiv.innerHTML = marked.parse(msg.text);
                 } else {
@@ -212,49 +173,37 @@ HTML_TEMPLATE = """
             });
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
-
         function startNewChat() {
-            fetch('/new_chat', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
+            fetch('/new_chat', { method: 'POST' }).then(res => res.json()).then(data => {
                 sessions = data.sessions;
                 currentChatId = data.current_chat_id;
                 renderSessions();
                 renderMessages();
             });
         }
-
         function switchSession(id) {
-            fetch(`/switch_chat/${id}`, { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
+            fetch(`/switch_chat/${id}`, { method: 'POST' }).then(res => res.json()).then(data => {
                 currentChatId = data.current_chat_id;
                 renderSessions();
                 renderMessages();
             });
         }
-
         function sendMessage() {
             const inputEl = document.getElementById('userInput');
             const text = inputEl.value.trim();
             if (!text) return;
-
             inputEl.value = '';
             inputEl.style.height = 'auto';
-
             if (!sessions[currentChatId]) {
                 sessions[currentChatId] = { title: "Cuộc trò chuyện mới", messages: [] };
             }
             sessions[currentChatId].messages.push({ role: 'user', text: text });
             renderMessages();
-
             fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: text, chat_id: currentChatId })
-            })
-            .then(res => res.json())
-            .then(data => {
+            }).then(res => res.json()).then(data => {
                 if (data.error) {
                     alert("Lỗi: " + data.error);
                     return;
@@ -262,26 +211,22 @@ HTML_TEMPLATE = """
                 sessions = data.sessions;
                 renderSessions();
                 renderMessages();
-            })
-            .catch(err => {
+            }).catch(err => {
                 console.error(err);
                 alert("Đã xảy ra lỗi kết nối.");
             });
         }
-
         function handleKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 sendMessage();
             }
         }
-
         const textarea = document.getElementById('userInput');
         textarea.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
         });
-
         renderSessions();
         renderMessages();
     </script>
@@ -298,7 +243,6 @@ def index():
         user_histories[new_id] = []
         session["current_chat_id"] = new_id
         save_db()
-    
     return render_template_string(HTML_TEMPLATE, sessions=user_sessions, current_chat_id=session["current_chat_id"])
 
 @app.route('/new_chat', methods=['POST'])
@@ -320,6 +264,9 @@ def switch_chat(chat_id):
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
+        if not client:
+            return jsonify({'error': 'Gemini Client chưa được khởi tạo. Kiểm tra lại API Key trên Render.'}), 500
+
         data = request.get_json()
         user_message = data.get("message", "").strip()
         chat_id = data.get("chat_id")
@@ -330,11 +277,10 @@ def chat():
         if chat_id not in user_histories:
             user_histories[chat_id] = []
 
-        # CHỈ ĐỔI TÊN ĐÚNG 1 LẦN DUY NHẤT NẾU ĐANG LÀ "Cuộc trò chuyện mới"
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_response = client.models.generate_content(
-                    model='gemini-3.5-flash-lite',
+                    model='gemini-2.5-flash',
                     contents=f"Dựa vào nội dung tin nhắn sau, hãy đặt một tiêu đề ngắn gọn (dưới 5 từ, ví dụ: 'Lời chào', 'Thắc mắc về người tạo ra'...) mô tả chủ đề đó. Chỉ trả về đúng tiêu đề, không có dấu ngoặc kép hay giải thích gì thêm: '{user_message}'"
                 )
                 new_title = title_response.text.strip().replace('"', '')
@@ -344,7 +290,7 @@ def chat():
                 print(f"Lỗi tạo tiêu đề: {e}")
 
         chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
+            model='gemini-2.5-flash',
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
@@ -389,25 +335,11 @@ def terms_of_service():
     return """
     <!DOCTYPE html>
     <html lang="vi">
-    <head>
-        <meta charset="UTF-8">
-        <title>Điều khoản sử dụng - Trợ lý ảo KhangPhan</title>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #fff; background-color: #0f172a; }
-            h1 { color: #38bdf8; }
-            .container { background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
-            a { color: #38bdf8; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Điều khoản sử dụng</h1>
-            <p>Chào mừng bạn đến với trợ lý ảo KhangPhan được sáng lập và phát triển bởi <strong>Phan Tăng Hoàng Khang</strong>.</p>
-            <p>Bằng việc truy cập và sử dụng ứng dụng này, bạn đồng ý tuân thủ các quy định và điều khoản sử dụng dịch vụ.</p>
-            <br>
-            <p><a href="/">&larr; Quay lại trang chủ chat</a></p>
-        </div>
+    <head><meta charset="UTF-8"><title>Điều khoản sử dụng</title></head>
+    <body style="font-family: Arial; background: #0f172a; color: #fff; padding: 40px;">
+        <h1 style="color: #38bdf8;">Điều khoản sử dụng</h1>
+        <p>Trợ lý ảo KhangPhan sáng lập bởi <strong>Phan Tăng Hoàng Khang</strong>.</p>
+        <a href="/" style="color: #38bdf8;">&larr; Quay lại chat</a>
     </body>
     </html>
     """
@@ -417,29 +349,15 @@ def privacy_policy():
     return """
     <!DOCTYPE html>
     <html lang="vi">
-    <head>
-        <meta charset="UTF-8">
-        <title>Chính sách bảo mật - Trợ lý ảo KhangPhan</title>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #fff; background-color: #0f172a; }
-            h1 { color: #38bdf8; }
-            .container { background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
-            a { color: #38bdf8; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Chính sách bảo mật</h1>
-            <p>Chúng tôi tôn trọng và cam kết bảo mật thông tin cũng như lịch sử trò chuyện của bạn trên hệ thống trợ lý ảo KhangPhan.</p>
-            <p>Dữ liệu lịch sử được lưu trữ bảo mật nhằm mục đích duy trì phiên làm việc và cải thiện trải nghiệm cá nhân của người dùng.</p>
-            <br>
-            <p><a href="/">&larr; Quay lại trang chủ chat</a></p>
-        </div>
+    <head><meta charset="UTF-8"><title>Chính sách bảo mật</title></head>
+    <body style="font-family: Arial; background: #0f172a; color: #fff; padding: 40px;">
+        <h1 style="color: #38bdf8;">Chính sách bảo mật</h1>
+        <p>Cam kết bảo mật dữ liệu trò chuyện của bạn.</p>
+        <a href="/" style="color: #38bdf8;">&larr; Quay lại chat</a>
     </body>
     </html>
     """
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
