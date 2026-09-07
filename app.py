@@ -1033,35 +1033,32 @@ def chat():
             "response": bot_response,
             "sessions": user_sessions
         })
+        
+```python
+@app.route('/privacy')
+def privacy_policy():
+    return render_template('privacy.html')
 
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+@app.route('/terms')
+def terms_of_service():
+    return """
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Điều khoản dịch vụ - AI KhangPhan</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; background: #0f172a; color: #f8fafc; }
+        h1 { color: #38bdf8; }
+    </style>
+</head>
+<body>
+    <h1>Điều khoản dịch vụ</h1>
+    <p>Khi sử dụng ứng dụng AI KhangPhan, bạn đồng ý tuân thủ các quy định và điều kiện sử dụng dịch vụ của chúng tôi.</p>
+    <p>Ứng dụng được xây dựng phục vụ nhu cầu trải nghiệm cá nhân và học tập.</p>
+</body>
+</html>
+"""
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-   @app.route('/privacy')
-def privacy_policy():
-    # Đảm bảo các dòng bên trong hàm này phải được thụt lề đều nhau (thường là 4 spaces)
-    return render_template('privacy.html')
-   
-    @app.route('/terms')
-def terms_of_service():
-    return """
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-        <meta charset="UTF-8">
-        <title>Điều khoản dịch vụ - AI KhangPhan</title>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; background: #0f172a; color: #f8fafc; }
-            h1 { color: #38bdf8; }
-        </style>
-    </head>
-    <body>
-        <h1>Điều khoản dịch vụ</h1>
-        <p>Khi sử dụng ứng dụng AI KhangPhan, bạn đồng ý tuân thủ các quy định và điều kiện sử dụng dịch vụ của chúng tôi.</p>
-        <p>Ứng dụng được xây dựng phục vụ nhu cầu trải nghiệm cá nhân và học tập.</p>
-    </body>
-    </html>
-    """
