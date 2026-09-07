@@ -1034,7 +1034,6 @@ def chat():
             "sessions": user_sessions
         })
         
-```python
 @app.route('/privacy')
 def privacy_policy():
     return render_template('privacy.html')
