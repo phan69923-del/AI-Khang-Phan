@@ -911,7 +911,7 @@ def chat():
         if chat_id not in user_histories:
             user_histories[chat_id] = []
 
-        # Tự động tạo tiêu đề nếu là cuộc trò chuyện mới
+       # Tự động tạo tiêu đề nếu là cuộc trò chuyện mới
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_response = client.models.generate_content(
@@ -938,7 +938,6 @@ def chat():
             },
             history=user_histories[chat_id]
         )
-
         response = chat_session.send_message(user_message)
         bot_response = response.text
 
