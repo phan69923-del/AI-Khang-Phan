@@ -959,13 +959,12 @@ def chat():
         if chat_id not in chat_sessions:
             chat_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
 
-        # Tự động nhờ Gemini đặt tiêu đề thông minh dựa trên nội dung tin nhắn đầu tiên
-        current_messages = chat_sessions[chat_id].get("messages", [])
-        if chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới" or len(current_messages) <= 2:
+        # CHỈ ĐỔI TÊN ĐÚNG 1 LẦN DUY NHẤT NẾU ĐANG LÀ "Cuộc trò chuyện mới"
+        if chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_response = client.models.generate_content(
                     model='gemini-3.5-flash-lite',
-                    contents=f"Dựa vào nội dung tin nhắn sau, hãy đặt một tiêu đề ngắn gọn (dưới 5 từ, ví dụ: 'Lời chào', 'Thắc mắc về người tạo ra', 'Lập trình Python'...) mô tả chủ đề đó. Chỉ trả về đúng tiêu đề, không có dấu ngoặc kép hay giải thích gì thêm: '{user_message}'"
+                    contents=f"Dựa vào nội dung tin nhắn sau, hãy đặt một tiêu đề ngắn gọn (dưới 5 từ, ví dụ: 'Lời chào', 'Thắc mắc về người tạo ra'...) mô tả chủ đề đó. Chỉ trả về đúng tiêu đề, không có dấu ngoặc kép hay giải thích gì thêm: '{user_message}'"
                 )
                 new_title = title_response.text.strip().replace('"', '')
                 if new_title:
@@ -1017,6 +1016,5 @@ def chat():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
