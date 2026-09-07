@@ -1029,10 +1029,14 @@ def chat():
 
         save_db()
 
-        return jsonify({
+return jsonify({
             "response": bot_response,
             "sessions": user_sessions
         })
+
+    except Exception as e:  # <-- Phải đặt lùi ra ngoài, thẳng hàng với chữ `try:` ở đầu hàm chat() (4 khoảng trắng)
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/privacy')
 def privacy_policy():
