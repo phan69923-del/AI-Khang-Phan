@@ -1,453 +1,2085 @@
 import os
-import json
+
 import traceback
-from flask import Flask, render_template_string, request, jsonify, session
+
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
+
 from google import genai
 
+from authlib.integrations.flask_client import OAuth
+
+
+
+# Import module bộ nhớ riêng
+
+import khangphan_memory
+
+
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan_secret_key_2026")
 
-# Khởi tạo client Gemini (sử dụng biến môi trường GEMINI_API_KEY)
-client = genai.Client()
+app.secret_key = '07062014'  # Cần thiết để dùng session đăng nhập
 
-DB_FILE = "chat_database.json"
 
-# Cấu trúc lưu trữ: { chat_id: { "title": "...", "messages": [...] } }
-user_sessions = {}
-# Lưu lịch sử thô để gửi cho Gemini chat API: { chat_id: [ { "role": "user", "parts": [...] }, ... ] }
-user_histories = {}
 
-def load_db():
-    global user_sessions, user_histories
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                user_sessions = data.get("sessions", {})
-                raw_histories = data.get("histories", {})
-                # Phục hồi cấu trúc history chuẩn của Gemini SDK
-                user_histories = {}
-                for cid, h_list in raw_histories.items():
-                    user_histories[cid] = []
-                    for item in h_list:
-                        user_histories[cid].append({
-                            "role": item.get("role"),
-                            "parts": [{"text": p.get("text")} for p in item.get("parts", [])]
-                        })
-        except Exception as e:
-            print(f"Lỗi đọc cơ sở dữ liệu: {e}")
-            user_sessions = {}
-            user_histories = {}
+# Khởi tạo client Gemini (Đảm bảo trên Render đã add biến môi trường GEMINI_API_KEY)
+
+api_key = os.environ.get("GEMINI_API_KEY")
+
+client = genai.Client(api_key=api_key)
+
+
+
+# Cấu hình OAuth cho Google lấy trực tiếp từ biến môi trường của Render
+
+oauth = OAuth(app)
+
+google = oauth.register(
+
+    name='google',
+
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+
+    client_kwargs={'scope': 'openid email profile'}
+
+)
+
+
+
+# Load bộ nhớ toàn cục từ database và chuẩn hóa cấu trúc phân theo user
+
+db = khangphan_memory.load_memory_data()
+
+users_db = db.setdefault("users", {})          # Lưu tài khoản đăng ký (email: password)
+
+all_chat_sessions = db.setdefault("sessions", {})  # Lưu danh sách chat theo từng user
+
+all_server_histories = db.setdefault("histories", {}) # Lưu lịch sử Gemini theo từng user
+
+
+
+def get_current_user_sessions():
+
+    user = session.get('user')
+
+    if not user:
+
+        return {}
+
+    if user not in all_chat_sessions:
+
+        all_chat_sessions[user] = {}
+
+    return all_chat_sessions[user]
+
+
+
+def get_current_user_histories():
+
+    user = session.get('user')
+
+    if not user:
+
+        return {}
+
+    if user not in all_server_histories:
+
+        all_server_histories[user] = {}
+
+    return all_server_histories[user]
+
+
 
 def save_db():
-    try:
-        data = {
-            "sessions": user_sessions,
-            "histories": user_histories
-        }
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        print(f"Lỗi lưu cơ sở dữ liệu: {e}")
 
-# Tải dữ liệu khi khởi động ứng dụng
-load_db()
+    khangphan_memory.save_memory_data({
 
-# Giao diện HTML + CSS + JavaScript tích hợp sẵn trong file
-HTML_TEMPLATE = """
+        "sessions": all_chat_sessions,
+
+        "histories": all_server_histories,
+
+        "users": users_db
+
+    })
+
+
+
+# ==================== GIAO DIỆN LOGIN / REGISTER ====================
+
+LOGIN_HTML_TEMPLATE = """
+
 <!DOCTYPE html>
+
 <html lang="vi">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trợ lý ảo KhangPhan</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.js"></script>
+
+    <title>AI KHANG PHAN - Đăng Nhập</title>
+
     <style>
-        :root {
-            --bg-color: #0f172a;
-            --sidebar-bg: #1e293b;
-            --chat-bg: #0f172a;
-            --input-bg: #334155;
-            --text-color: #f8fafc;
-            --text-secondary: #94a3b8;
-            --accent-color: #38bdf8;
-            --accent-hover: #0ea5e9;
-            --user-bubble: #2563eb;
-            --bot-bubble: #1e293b;
-            --border-color: #334155;
+
+        body { 
+
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+
+            background-color: #0f172a; 
+
+            color: white; 
+
+            display: flex; 
+
+            justify-content: center; 
+
+            align-items: center; 
+
+            height: 100vh; 
+
+            margin: 0; 
+
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); display: flex; height: 100vh; overflow: hidden; }
-        
-        /* Sidebar */
-        .sidebar { width: 280px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; height: 100%; transition: transform 0.3s ease; }
-        .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; }
-        .new-chat-btn { background-color: var(--accent-color); color: #0f172a; border: none; padding: 10px 15px; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s; }
-        .new-chat-btn:hover { background-color: var(--accent-hover); }
-        
-        .session-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
-        .session-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; color: var(--text-secondary); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: all 0.2s; }
-        .session-item:hover { background-color: rgba(255,255,255,0.05); color: var(--text-color); }
-        .session-item.active { background-color: rgba(56, 189, 248, 0.15); color: var(--accent-color); font-weight: 500; }
-        
-        .sidebar-footer { padding: 15px 20px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; }
-        .sidebar-footer a { color: var(--text-secondary); text-decoration: none; }
-        .sidebar-footer a:hover { color: var(--accent-color); text-decoration: underline; }
 
-        /* Main Chat Area */
-        .main-chat { flex: 1; display: flex; flex-direction: column; height: 100%; background-color: var(--chat-bg); }
-        .chat-header { padding: 15px 25px; border-bottom: 1px solid var(--border-color); background-color: var(--sidebar-bg); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
-        
-        .chat-messages { flex: 1; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
-        
-        .message { max-width: 75%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; font-size: 15px; word-wrap: break-word; }
-        .message.user { background-color: var(--user-bubble); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .message.bot { background-color: var(--bot-bubble); color: var(--text-color); align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid var(--border-color); }
-        
-        .message p { margin-bottom: 8px; }
-        .message p:last-child { margin-bottom: 0; }
-        .message pre { background: #090d16; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
-        .message code { font-family: Consolas, Monaco, monospace; font-size: 13px; }
+        .card { 
 
-        .chat-input-container { padding: 20px 25px; background-color: var(--sidebar-bg); border-top: 1px solid var(--border-color); }
-        .chat-input-wrapper { display: flex; background-color: var(--input-bg); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; transition: border-color 0.2s; }
-        .chat-input-wrapper:focus-within { border-color: var(--accent-color); }
-        
-        textarea { flex: 1; background: transparent; border: none; padding: 12px 15px; color: var(--text-color); font-size: 15px; resize: none; max-height: 150px; outline: none; font-family: inherit; }
-        .send-btn { background-color: transparent; border: none; color: var(--accent-color); padding: 0 15px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: color 0.2s; }
-        .send-btn:hover { color: var(--accent-hover); }
+            background: #1e293b; 
 
-        .welcome-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); text-align: center; gap: 10px; }
-        .welcome-screen h2 { color: var(--text-color); font-size: 24px; }
+            padding: 30px; 
+
+            border-radius: 12px; 
+
+            width: 340px; 
+
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+
+            text-align: center; 
+
+        }
+
+        h2 { margin-bottom: 20px; color: #f8fafc; }
+
+        input { 
+
+            width: 100%; 
+
+            padding: 12px; 
+
+            margin: 8px 0; 
+
+            border-radius: 6px; 
+
+            border: 1px solid #334155; 
+
+            background: #0f172a; 
+
+            color: white; 
+
+            box-sizing: border-box; 
+
+            outline: none;
+
+        }
+
+        input:focus { border-color: #38bdf8; }
+
+        button { 
+
+            width: 100%; 
+
+            padding: 12px; 
+
+            margin-top: 10px; 
+
+            border-radius: 6px; 
+
+            border: none; 
+
+            background: #2563eb; 
+
+            color: white; 
+
+            font-weight: bold; 
+
+            cursor: pointer; 
+
+            transition: 0.2s;
+
+        }
+
+        button:hover { background: #1d4ed8; }
+
+        .google-btn {
+
+            background-color: #f1f5f9;
+
+            color: #0f172a;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            gap: 10px;
+
+            font-weight: 600;
+
+            text-decoration: none;
+
+            margin-top: 12px;
+
+            padding: 12px;
+
+            border-radius: 6px;
+
+        }
+
+        .google-btn:hover { background-color: #e2e8f0; }
+
+        .divider {
+
+            margin: 15px 0;
+
+            border-bottom: 1px solid #334155;
+
+            position: relative;
+
+        }
+
+        .divider span {
+
+            position: absolute;
+
+            top: -10px;
+
+            left: 50%;
+
+            transform: translateX(-50%);
+
+            background: #1e293b;
+
+            padding: 0 10px;
+
+            font-size: 12px;
+
+            color: #94a3b8;
+
+        }
+
+        .toggle { margin-top: 20px; font-size: 14px; color: #94a3b8; cursor: pointer; }
+
+        .toggle span { color: #38bdf8; text-decoration: underline; }
+
+        .error { color: #f87171; font-size: 14px; margin-top: 12px; min-height: 18px; }
+
     </style>
+
 </head>
+
 <body>
 
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h2 style="color: var(--accent-color); font-size: 18px;">KhangPhan AI</h2>
-            <button class="new-chat-btn" onclick="startNewChat()">+ Cuộc trò chuyện mới</button>
-        </div>
-        <div class="session-list" id="sessionList">
-            <!-- Danh sách session render bằng JS -->
-        </div>
-        <div class="sidebar-footer">
-            <span>&copy; 2026 KhangPhan</span>
-            <div>
-                <a href="/terms" target="_blank">Điều khoản</a> &bull; 
-                <a href="/privacy" target="_blank">Bảo mật</a>
-            </div>
-        </div>
+
+
+<div class="card">
+
+    <h2 id="form-title">Đăng Nhập AI</h2>
+
+    <input type="text" id="email" placeholder="Email / Tên đăng nhập" autocomplete="off">
+
+    <input type="password" id="password" placeholder="Mật khẩu" onkeypress="handleKeyPress(event)">
+
+    
+
+    <button id="submit-btn" onclick="handleSubmit()">Đăng Nhập</button>
+
+    
+
+    <div class="divider"><span>HOẶC</span></div>
+
+
+
+    <a href="/login/google" class="google-btn">
+
+        <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+
+        Đăng nhập với Google
+
+    </a>
+
+
+
+    <div class="error" id="error-msg"></div>
+
+
+
+    <div class="toggle" onclick="toggleForm()">
+
+        <span id="toggle-text">Chưa có tài khoản? Đăng ký ngay</span>
+
     </div>
 
-    <!-- Main Chat -->
-    <div class="main-chat">
-        <div class="chat-header" id="chatHeader">Trợ lý ảo KhangPhan</div>
+</div>
+
+
+
+<script>
+
+    let isRegister = false;
+
+
+
+    function toggleForm() {
+
+        isRegister = !isRegister;
+
+        document.getElementById('form-title').innerText = isRegister ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập AI';
+
+        document.getElementById('submit-btn').innerText = isRegister ? 'Đăng Ký' : 'Đăng Nhập';
+
+        document.getElementById('toggle-text').innerText = isRegister ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký ngay';
+
+        document.getElementById('error-msg').innerText = '';
+
+    }
+
+
+
+    function handleKeyPress(e) {
+
+        if (e.key === 'Enter') {
+
+            handleSubmit();
+
+        }
+
+    }
+
+
+
+    async function handleSubmit() {
+
+        const email = document.getElementById('email').value.trim();
+
+        const password = document.getElementById('password').value.trim();
+
+        const errorMsg = document.getElementById('error-msg');
+
         
-        <div class="chat-messages" id="chatMessages">
-            <div class="welcome-screen">
-                <h2>Xin chào! Tôi có thể giúp gì cho bạn hôm nay?</h2>
-                <p>Hãy nhắn gì đó để bắt đầu cuộc trò chuyện với trợ lý ảo KhangPhan.</p>
-            </div>
-        </div>
 
-        <div class="chat-input-container">
-            <div class="chat-input-wrapper">
-                <textarea id="userInput" placeholder="Nhắn tin cho KhangPhan..." rows="1" onkeydown="handleKeyPress(event)"></textarea>
-                <button class="send-btn" onclick="sendMessage()">&#10148;</button>
-            </div>
-        </div>
-    </div>
+        if (!email || !password) {
 
-    <script>
-        let sessions = {{ sessions|tojson }};
-        let currentChatId = "{{ current_chat_id }}";
+            errorMsg.innerText = 'Vui lòng nhập đầy đủ thông tin!';
 
-        function renderSessions() {
-            const listEl = document.getElementById('sessionList');
-            listEl.innerHTML = '';
-            
-            const sortedIds = Object.keys(sessions).reverse();
-            if (sortedIds.length === 0) {
-                listEl.innerHTML = '<div style="padding: 10px; color: #64748b; font-size: 13px; text-align: center;">Chưa có lịch sử</div>';
-                return;
-            }
+            return;
 
-            sortedIds.forEach(id => {
-                const session = sessions[id];
-                const div = document.createElement('div');
-                div.className = `session-item ${id === currentChatId ? 'active' : ''}`;
-                div.innerText = session.title || "Cuộc trò chuyện mới";
-                div.onclick = () => switchSession(id);
-                listEl.appendChild(div);
-            });
         }
 
-        function renderMessages() {
-            const chatMessages = document.getElementById('chatMessages');
-            chatMessages.innerHTML = '';
 
-            if (!sessions[currentChatId] || sessions[currentChatId].messages.length === 0) {
-                chatMessages.innerHTML = `
-                    <div class="welcome-screen">
-                        <h2>Xin chào! Tôi có thể giúp gì cho bạn hôm nay?</h2>
-                        <p>Hãy nhắn gì đó để bắt đầu cuộc trò chuyện với trợ lý ảo KhangPhan.</p>
-                    </div>
-                `;
-                document.getElementById('chatHeader').innerText = "Trợ lý ảo KhangPhan";
-                return;
-            }
 
-            document.getElementById('chatHeader').innerText = sessions[currentChatId].title || "Trợ lý ảo KhangPhan";
+        errorMsg.innerText = 'Đang xử lý...';
 
-            sessions[currentChatId].messages.forEach(msg => {
-                const msgDiv = document.createElement('div');
-                msgDiv.className = `message ${msg.role === 'user' ? 'user' : 'bot'}`;
-                
-                if (msg.role === 'bot') {
-                    msgDiv.innerHTML = marked.parse(msg.text);
-                } else {
-                    msgDiv.innerText = msg.text;
-                }
-                chatMessages.appendChild(msgDiv);
-            });
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
+        const endpoint = isRegister ? '/register' : '/login';
 
-        function startNewChat() {
-            fetch('/new_chat', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                sessions = data.sessions;
-                currentChatId = data.current_chat_id;
-                renderSessions();
-                renderMessages();
-            });
-        }
 
-        function switchSession(id) {
-            fetch(`/switch_chat/${id}`, { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                currentChatId = data.current_chat_id;
-                renderSessions();
-                renderMessages();
-            });
-        }
 
-        function sendMessage() {
-            const inputEl = document.getElementById('userInput');
-            const text = inputEl.value.trim();
-            if (!text) return;
+        try {
 
-            inputEl.value = '';
-            inputEl.style.height = 'auto';
+            const res = await fetch(endpoint, {
 
-            // Hiển thị tin nhắn user ngay lập tức
-            if (!sessions[currentChatId]) {
-                sessions[currentChatId] = { title: "Cuộc trò chuyện mới", messages: [] };
-            }
-            sessions[currentChatId].messages.push({ role: 'user', text: text });
-            renderMessages();
-
-            fetch('/chat', {
                 method: 'POST',
+
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text, chat_id: currentChatId })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.error) {
-                    alert("Lỗi: " + data.error);
-                    return;
-                }
-                sessions = data.sessions;
-                renderSessions();
-                renderMessages();
-            })
-            .catch(err => {
-                console.error(err);
-                alert("Đã xảy ra lỗi kết nối.");
+
+                body: JSON.stringify({ email, username: email, password })
+
             });
-        }
 
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
+            const data = await res.json();
+
+
+
+            if (res.ok && data.success) {
+
+                window.location.href = data.redirect || '/';
+
+            } else {
+
+                errorMsg.innerText = data.error || data.message || 'Có lỗi xảy ra!';
+
             }
+
+        } catch (err) {
+
+            errorMsg.innerText = 'Lỗi kết nối máy chủ!';
+
         }
 
-        // Tự động co giãn textarea
-        const textarea = document.getElementById('userInput');
-        textarea.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-        });
+    }
 
-        // Khởi tạo lần đầu
-        renderSessions();
-        renderMessages();
-    </script>
+</script>
+
+
+
 </body>
+
 </html>
+
 """
 
-@app.route('/')
-def index():
-    if "current_chat_id" not in session or session["current_chat_id"] not in user_sessions:
-        # Tạo phiên chat mặc định nếu chưa có
-        import uuid
-        new_id = str(uuid.uuid4())[:8]
-        user_sessions[new_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
-        user_histories[new_id] = []
-        session["current_chat_id"] = new_id
-        save_db()
+
+
+# ==================== GIAO DIỆN CHÍNH (CHAT AI) ====================
+
+CHAT_HTML_TEMPLATE = """
+
+<!DOCTYPE html>
+
+<html lang="vi">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI KhangPhan - Trợ lý ảo thông minh</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     
-    return render_template_string(HTML_TEMPLATE, sessions=user_sessions, current_chat_id=session["current_chat_id"])
+
+    <style>
+
+        * {
+
+            box-sizing: border-box;
+
+            margin: 0;
+
+            padding: 0;
+
+            font-family: 'Inter', sans-serif;
+
+        }
+
+
+
+        body {
+
+            background-color: #131314;
+
+            color: #e3e3e3;
+
+            display: flex;
+
+            height: 100vh;
+
+            overflow: hidden;
+
+            transition: background 0.3s, color 0.3s;
+
+        }
+
+
+
+        body.light-mode {
+
+            background-color: #ffffff;
+
+            color: #1f1f1f;
+
+        }
+
+        body.light-mode .sidebar {
+
+            background-color: #f0f4f9;
+
+            border-right: 1px solid #d9d9d9;
+
+        }
+
+        body.light-mode .sidebar-logo-container span,
+
+        body.light-mode .new-chat-btn,
+
+        body.light-mode .history-item {
+
+            color: #1f1f1f;
+
+        }
+
+        body.light-mode .new-chat-btn {
+
+            background-color: #e2e8f0;
+
+        }
+
+        body.light-mode .new-chat-btn:hover {
+
+            background-color: #cbd5e1;
+
+        }
+
+        body.light-mode .history-item:hover, 
+
+        body.light-mode .history-item.active {
+
+            background-color: #e2e8f0;
+
+        }
+
+        body.light-mode .sidebar-footer {
+
+            border-top: 1px solid #d9d9d9;
+
+            color: #555555;
+
+        }
+
+        body.light-mode .footer-btn {
+
+            background-color: #e2e8f0;
+
+            color: #1f1f1f;
+
+        }
+
+        body.light-mode .footer-btn:hover {
+
+            background-color: #cbd5e1;
+
+        }
+
+        body.light-mode .chat-header {
+
+            border-bottom: 1px solid #d9d9d9;
+
+            color: #444444;
+
+        }
+
+        body.light-mode .main-chat {
+
+            background-color: #ffffff;
+
+        }
+
+        body.light-mode .message.bot {
+
+            background-color: #f0f4f9;
+
+            color: #1f1f1f;
+
+            border: 1px solid #d9d9d9;
+
+        }
+
+        body.light-mode .message.user {
+
+            background-color: #e2e8f0;
+
+            color: #1f1f1f;
+
+        }
+
+        body.light-mode .chat-input-box {
+
+            background-color: #f0f4f9;
+
+            border: 1px solid #d9d9d9;
+
+        }
+
+        body.light-mode .chat-input-box textarea {
+
+            color: #1f1f1f;
+
+        }
+
+        body.light-mode .send-btn {
+
+            color: #0b57d0;
+
+        }
+
+        body.light-mode .sidebar-toggle-btn:hover {
+
+            background-color: #e2e8f0;
+
+        }
+
+        body.light-mode .sidebar-toggle-btn {
+
+            color: #1f1f1f;
+
+        }
+
+
+
+        .sidebar {
+
+            width: 260px;
+
+            background-color: #1e1f20;
+
+            border-right: 1px solid #2b2c2d;
+
+            display: flex;
+
+            flex-direction: column;
+
+            justify-content: space-between;
+
+            height: 100vh;
+
+            position: fixed;
+
+            left: 0;
+
+            top: 0;
+
+            z-index: 1000;
+
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+            padding-bottom: env(safe-area-inset-bottom);
+
+        }
+
+
+
+        .sidebar.closed {
+
+            transform: translateX(-100%);
+
+        }
+
+
+
+        .sidebar-top {
+
+            padding: 16px;
+
+        }
+
+
+
+        .sidebar-logo-container {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 10px;
+
+            padding: 8px 4px;
+
+            margin-bottom: 20px;
+
+        }
+
+
+
+        .sidebar-logo-container i {
+
+            font-size: 20px;
+
+            color: #8ab4f8;
+
+        }
+
+
+
+        .sidebar-logo-container span {
+
+            color: #ffffff;
+
+            font-weight: 600;
+
+            font-size: 15px;
+
+        }
+
+
+
+        .new-chat-btn {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 10px;
+
+            background-color: #2b2c2d;
+
+            color: #ffffff;
+
+            border: none;
+
+            padding: 12px 16px;
+
+            border-radius: 30px;
+
+            width: 100%;
+
+            cursor: pointer;
+
+            font-size: 14px;
+
+            font-weight: 500;
+
+            transition: background 0.2s;
+
+        }
+
+
+
+        .new-chat-btn:hover {
+
+            background-color: #38393a;
+
+        }
+
+
+
+        .chat-history {
+
+            padding: 0 16px;
+
+            overflow-y: auto;
+
+            flex: 1;
+
+        }
+
+
+
+        .history-item {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            padding: 10px 12px;
+
+            border-radius: 20px;
+
+            font-size: 14px;
+
+            color: #cccccc;
+
+            cursor: pointer;
+
+            margin-top: 5px;
+
+            transition: background 0.2s;
+
+        }
+
+
+
+        .history-item:hover, .history-item.active {
+
+            background-color: #2b2c2d;
+
+            color: #ffffff;
+
+        }
+
+
+
+        .history-content {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 10px;
+
+            flex: 1;
+
+            overflow: hidden;
+
+        }
+
+
+
+        .history-text {
+
+            flex: 1;
+
+            white-space: nowrap;
+
+            overflow: hidden;
+
+            text-overflow: ellipsis;
+
+        }
+
+
+
+        .delete-chat-btn {
+
+            background: none;
+
+            border: none;
+
+            color: #888888;
+
+            cursor: pointer;
+
+            padding: 4px 6px;
+
+            border-radius: 50%;
+
+            font-size: 12px;
+
+            transition: color 0.2s, background 0.2s;
+
+        }
+
+
+
+        .delete-chat-btn:hover {
+
+            color: #ff6b6b;
+
+            background-color: rgba(255, 107, 107, 0.1);
+
+        }
+
+
+
+        .sidebar-footer {
+
+            padding: 16px;
+
+            padding-bottom: calc(16px + env(safe-area-inset-bottom));
+
+            border-top: 1px solid #2b2c2d;
+
+            font-size: 13px;
+
+            color: #aaaaaa;
+
+        }
+
+
+
+        .footer-actions {
+
+            display: flex;
+
+            gap: 8px;
+
+            margin-top: 10px;
+
+        }
+
+
+
+        .footer-btn {
+
+            flex: 1;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            gap: 6px;
+
+            background-color: #2b2c2d;
+
+            color: #ffffff;
+
+            border: none;
+
+            padding: 8px 10px;
+
+            border-radius: 16px;
+
+            cursor: pointer;
+
+            font-size: 13px;
+
+            font-weight: 500;
+
+            transition: background 0.2s;
+
+            text-decoration: none;
+
+        }
+
+
+
+        .footer-btn:hover {
+
+            background-color: #38393a;
+
+        }
+
+
+
+        .main-chat {
+
+            margin-left: 260px;
+
+            width: calc(100% - 260px);
+
+            display: flex;
+
+            flex-direction: column;
+
+            height: 100vh;
+
+            background-color: #131314;
+
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+        }
+
+
+
+        .main-chat.expanded {
+
+            margin-left: 0;
+
+            width: 100%;
+
+        }
+
+
+
+        .chat-header {
+
+            padding: 16px 24px;
+
+            font-size: 16px;
+
+            font-weight: 500;
+
+            color: #c4c7c5;
+
+            border-bottom: 1px solid #2b2c2d;
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 12px;
+
+        }
+
+
+
+        .sidebar-toggle-btn {
+
+            background: none;
+
+            border: none;
+
+            cursor: pointer;
+
+            padding: 8px;
+
+            border-radius: 50%;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            color: #e3e3e3;
+
+            font-size: 16px;
+
+            transition: background 0.2s;
+
+        }
+
+        .sidebar-toggle-btn:hover {
+
+            background-color: #2b2c2d;
+
+        }
+
+
+
+        .chat-messages {
+
+            flex: 1;
+
+            overflow-y: auto;
+
+            padding: 20px 24px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 20px;
+
+            max-width: 900px;
+
+            width: 100%;
+
+            margin: 0 auto;
+
+        }
+
+
+
+        .message {
+
+            max-width: 80%;
+
+            line-height: 1.6;
+
+            font-size: 15px;
+
+            padding: 12px 18px;
+
+            border-radius: 16px;
+
+            word-wrap: break-word;
+
+            white-space: pre-wrap;
+
+        }
+
+
+
+        .message.user {
+
+            background-color: #2b2c2d;
+
+            align-self: flex-end;
+
+            color: #ffffff;
+
+            border-bottom-right-radius: 4px;
+
+        }
+
+
+
+        .message.bot {
+
+            background-color: #1e1f20;
+
+            align-self: flex-start;
+
+            color: #e3e3e3;
+
+            border: 1px solid #2b2c2d;
+
+            border-bottom-left-radius: 4px;
+
+        }
+
+
+
+        .chat-input-container {
+
+            padding: 20px 24px;
+
+            padding-bottom: calc(20px + env(safe-area-inset-bottom));
+
+            background-color: transparent;
+
+        }
+
+
+
+        .chat-input-box {
+
+            max-width: 900px;
+
+            margin: 0 auto;
+
+            background-color: #1e1f20;
+
+            border-radius: 30px;
+
+            display: flex;
+
+            align-items: center;
+
+            padding: 8px 16px;
+
+            border: 1px solid #333333;
+
+        }
+
+
+
+        .chat-input-box textarea {
+
+            flex: 1;
+
+            background: none;
+
+            border: none;
+
+            color: #ffffff;
+
+            font-size: 15px;
+
+            resize: none;
+
+            outline: none;
+
+            max-height: 120px;
+
+            padding: 8px 0;
+
+        }
+
+
+
+        .send-btn {
+
+            background: none;
+
+            border: none;
+
+            color: #8ab4f8;
+
+            font-size: 18px;
+
+            cursor: pointer;
+
+            padding: 8px;
+
+            border-radius: 50%;
+
+            transition: background 0.2s;
+
+        }
+
+
+
+        .send-btn:hover {
+
+            background-color: #2b2c2d;
+
+        }
+
+
+
+        @media (max-width: 768px) {
+
+            .sidebar {
+
+                transform: translateX(-100%);
+
+            }
+
+            .sidebar.mobile-open {
+
+                transform: translateX(0);
+
+                box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+
+            }
+
+            .main-chat {
+
+                margin-left: 0 !important;
+
+                width: 100% !important;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="sidebar" id="sidebar">
+
+        <div class="sidebar-top">
+
+            <div class="sidebar-logo-container">
+
+                <i class="fa-solid fa-brain"></i>
+
+                <span>AI KhangPhan</span>
+
+            </div>
+
+            <button class="new-chat-btn" onclick="startNewChat()">
+
+                <i class="fa-solid fa-plus"></i> Cuộc trò chuyện mới
+
+            </button>
+
+        </div>
+
+        
+
+        <div class="chat-history" id="chatHistory"></div>
+
+
+
+        <div class="sidebar-footer">
+
+            <div> Khang Phan WorkSpace </div>
+
+            <div class="footer-actions">
+
+                <button class="footer-btn" onclick="toggleTheme()">
+
+                    <i class="fa-solid fa-circle-half-stroke"></i> Giao diện
+
+                </button>
+
+                <a href="/logout" class="footer-btn">
+
+                    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="main-chat" id="mainChat">
+
+        <div class="chat-header">
+
+            <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
+
+                <i id="toggleIcon" class="fa-solid fa-bars"></i>
+
+            </button>
+
+            <span id="chatTitleHeader">AI KhangPhan</span>
+
+        </div>
+
+
+
+        <div class="chat-messages" id="chatMessages">
+
+            <div class="message bot">
+
+                Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?
+
+            </div>
+
+        </div>
+
+
+
+        <div class="chat-input-container">
+
+            <div class="chat-input-box">
+
+                <textarea id="userInput" placeholder="Hỏi AI Khang Phan..." rows="1" oninput="autoResize(this)" onkeydown="checkEnter(event)"></textarea>
+
+                <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <script>
+
+        let chatSessions = {{ sessions | tojson | safe }};
+
+        let currentChatId = "";
+
+
+
+        const sessionKeys = Object.keys(chatSessions);
+
+        if (sessionKeys.length > 0) {
+
+            currentChatId = sessionKeys[0];
+
+            loadChatSession(currentChatId);
+
+        } else {
+
+            startNewChat(false);
+
+        }
+
+        renderHistoryList();
+
+
+
+        function toggleSidebar() {
+
+            const sidebar = document.getElementById('sidebar');
+
+            const mainChat = document.getElementById('mainChat');
+
+            const toggleIcon = document.getElementById('toggleIcon');
+
+
+
+            if (window.innerWidth <= 768) {
+
+                sidebar.classList.toggle('mobile-open');
+
+                toggleIcon.className = sidebar.classList.contains('mobile-open') ? "fa-solid fa-xmark" : "fa-solid fa-bars";
+
+            } else {
+
+                sidebar.classList.toggle('closed');
+
+                mainChat.classList.toggle('expanded');
+
+                toggleIcon.className = sidebar.classList.contains('closed') ? "fa-solid fa-arrow-right" : "fa-solid fa-bars";
+
+            }
+
+        }
+
+
+
+        function autoResize(textarea) {
+
+            textarea.style.height = 'auto';
+
+            textarea.style.height = textarea.scrollHeight + 'px';
+
+        }
+
+
+
+        function checkEnter(event) {
+
+            if (event.key === 'Enter' && !event.shiftKey) {
+
+                event.preventDefault();
+
+                sendMessage();
+
+            }
+
+        }
+
+
+
+        function toggleTheme() {
+
+            document.body.classList.toggle('light-mode');
+
+        }
+
+
+
+        async function startNewChat() {
+
+            const newId = 'chat_' + Date.now();
+
+            try {
+
+                const response = await fetch('/new_chat', {
+
+                    method: 'POST',
+
+                    headers: { 'Content-Type': 'application/json' },
+
+                    body: JSON.stringify({ chat_id: newId })
+
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+
+                    chatSessions = data.sessions;
+
+                    loadChatSession(newId);
+
+                }
+
+            } catch (e) {
+
+                console.error("Lỗi tạo chat mới:", e);
+
+            }
+
+        }
+
+
+
+        function renderHistoryList() {
+
+            const historyContainer = document.getElementById('chatHistory');
+
+            historyContainer.innerHTML = '';
+
+
+
+            for (let id in chatSessions) {
+
+                const item = document.createElement('div');
+
+                item.className = `history-item ${id === currentChatId ? 'active' : ''}`;
+
+                item.innerHTML = `
+
+                    <div class="history-content" onclick="loadChatSession('${id}')">
+
+                        <i class="fa-regular fa-message"></i>
+
+                        <span class="history-text">${chatSessions[id].title}</span>
+
+                    </div>
+
+                    <button class="delete-chat-btn" onclick="deleteChat(event, '${id}')" title="Xóa đoạn chat">
+
+                        <i class="fa-solid fa-trash-can"></i>
+
+                    </button>
+
+                `;
+
+                historyContainer.appendChild(item);
+
+            }
+
+        }
+
+
+
+        function loadChatSession(id) {
+
+            currentChatId = id;
+
+            if (!chatSessions[id]) return;
+
+
+
+            document.getElementById('chatTitleHeader').textContent = chatSessions[id].title;
+
+            
+
+            const chatMessages = document.getElementById('chatMessages');
+
+            chatMessages.innerHTML = '';
+
+
+
+            chatSessions[id].messages.forEach(msg => {
+
+                const msgDiv = document.createElement('div');
+
+                msgDiv.className = `message ${msg.role}`;
+
+                msgDiv.textContent = msg.text;
+
+                chatMessages.appendChild(msgDiv);
+
+            });
+
+
+
+            renderHistoryList();
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        }
+
+
+
+        async function deleteChat(event, id) {
+
+            event.stopPropagation();
+
+            if (!confirm("Bạn có chắc chắn muốn xóa đoạn chat này không?")) return;
+
+
+
+            try {
+
+                const response = await fetch('/delete_chat', {
+
+                    method: 'POST',
+
+                    headers: { 'Content-Type': 'application/json' },
+
+                    body: JSON.stringify({ chat_id: id })
+
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+
+                    chatSessions = data.sessions;
+
+                    const keys = Object.keys(chatSessions);
+
+                    if (keys.length > 0) {
+
+                        loadChatSession(keys[0]);
+
+                    } else {
+
+                        startNewChat();
+
+                    }
+
+                }
+
+            } catch (e) {
+
+                console.error("Lỗi xóa chat:", e);
+
+            }
+
+        }
+
+
+
+        async function sendMessage() {
+
+            const input = document.getElementById('userInput');
+
+            const messageText = input.value.trim();
+
+            if (!messageText) return;
+
+
+
+            const chatMessages = document.getElementById('chatMessages');
+
+            
+
+            const userMsg = document.createElement('div');
+
+            userMsg.className = 'message user';
+
+            userMsg.textContent = messageText;
+
+            chatMessages.appendChild(userMsg);
+
+            chatSessions[currentChatId].messages.push({ role: 'user', text: messageText });
+
+
+
+            input.value = '';
+
+            input.style.height = 'auto';
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+
+
+            const botMsg = document.createElement('div');
+
+            botMsg.className = 'message bot';
+
+            botMsg.textContent = "Đang suy nghĩ...⟳";
+
+            chatMessages.appendChild(botMsg);
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+
+
+            let retries = 3;
+
+            let success = false;
+
+            let finalBotResponse = "";
+
+
+
+            while (retries > 0 && !success) {
+
+                try {
+
+                    const response = await fetch('/chat', {
+
+                        method: 'POST',
+
+                        headers: { 'Content-Type': 'application/json' },
+
+                        body: JSON.stringify({ message: messageText, chat_id: currentChatId })
+
+                    });
+
+
+
+                    const data = await response.json();
+
+                    
+
+                    if (response.ok && data.response) {
+
+                        finalBotResponse = data.response;
+
+                        botMsg.textContent = finalBotResponse;
+
+                        success = true;
+
+                        chatSessions = data.sessions;
+
+                        document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
+
+                        renderHistoryList();
+
+                    } else {
+
+                        throw new Error(data.error || "Server quá tải");
+
+                    }
+
+                } catch (error) {
+
+                    retries--;
+
+                    if (retries === 0) {
+
+                        finalBotResponse = "Hệ thống đang quá tải tạm thời (Lỗi 503). Vui lòng thử lại sau ít phút!";
+
+                        botMsg.textContent = finalBotResponse;
+
+                    } else {
+
+                        botMsg.textContent = `Đang thử kết nối lại lần thứ ${4 - retries}...`;
+
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    }
+
+                }
+
+            }
+
+
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        }
+
+    </script>
+
+</body>
+
+</html>
+
+"""
+
+
+
+# ==================== ROUTE XỬ LÝ FLASK ====================
+
+
+
+@app.route('/')
+
+def index():
+
+    if 'user' not in session:
+
+        return redirect(url_for('login'))
+
+    user_sessions = get_current_user_sessions()
+
+    return render_template_string(CHAT_HTML_TEMPLATE, sessions=user_sessions)
+
+
+
+@app.route('/login', methods=['GET', 'POST'])
+
+def login():
+
+    if request.method == 'GET':
+
+        return render_template_string(LOGIN_HTML_TEMPLATE)
+
+    
+
+    data = request.get_json() or {}
+
+    email = data.get('email')
+
+    password = data.get('password')
+
+    
+
+    if email in users_db and users_db[email] == password:
+
+        session['user'] = email
+
+        return jsonify({"success": True, "redirect": "/"})
+
+    else:
+
+        return jsonify({"success": False, "error": "Sai tài khoản hoặc mật khẩu!"}), 401
+
+
+
+@app.route('/register', methods=['POST'])
+
+def register():
+
+    data = request.get_json() or {}
+
+    email = data.get('email')
+
+    password = data.get('password')
+
+    
+
+    if not email or not password:
+
+        return jsonify({"success": False, "error": "Vui lòng nhập đầy đủ thông tin!"}), 400
+
+        
+
+    if email in users_db:
+
+        return jsonify({"success": False, "error": "Tài khoản đã tồn tại!"}), 400
+
+        
+
+    users_db[email] = password
+
+    session['user'] = email
+
+    
+
+    # Khởi tạo vùng nhớ rỗng cho user mới
+
+    get_current_user_sessions()
+
+    get_current_user_histories()
+
+    save_db()
+
+    
+
+    return jsonify({"success": True, "redirect": "/"})
+
+
+
+@app.route('/logout')
+
+def logout():
+
+    session.pop('user', None)
+
+    return redirect(url_for('login'))
+
+
 
 @app.route('/new_chat', methods=['POST'])
+
 def new_chat():
-    import uuid
-    new_id = str(uuid.uuid4())[:8]
-    user_sessions[new_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
-    user_histories[new_id] = []
-    session["current_chat_id"] = new_id
+
+    if 'user' not in session:
+
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+
+    
+
+    data = request.get_json() or {}
+
+    chat_id = data.get('chat_id') or f"chat_{os.urandom(4).hex()}"
+
+    
+
+    user_sessions = get_current_user_sessions()
+
+    user_histories = get_current_user_histories()
+
+    
+
+    user_sessions[chat_id] = {
+
+        "title": "Cuộc trò chuyện mới",
+
+        "messages": []
+
+    }
+
+    user_histories[chat_id] = []
+
+    
+
     save_db()
-    return jsonify({"current_chat_id": new_id, "sessions": user_sessions})
 
-@app.route('/switch_chat/<chat_id>', methods=['POST'])
-def switch_chat(chat_id):
+    
+
+    return jsonify({"sessions": user_sessions, "chat_id": chat_id})
+
+
+
+@app.route('/delete_chat', methods=['POST'])
+
+def delete_chat():
+
+    if 'user' not in session:
+
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+
+        
+
+    data = request.get_json() or {}
+
+    chat_id = data.get('chat_id')
+
+    
+
+    user_sessions = get_current_user_sessions()
+
+    user_histories = get_current_user_histories()
+
+    
+
     if chat_id in user_sessions:
-        session["current_chat_id"] = chat_id
-    return jsonify({"current_chat_id": session.get("current_chat_id")})
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    try:
-        data = request.get_json()
-        user_message = data.get("message", "").strip()
-        chat_id = data.get("chat_id")
+        del user_sessions[chat_id]
 
-        if not chat_id or chat_id not in user_sessions:
-            return jsonify({'error': 'Phiên chat không hợp lệ'}), 400
+    if chat_id in user_histories:
 
-        if chat_id not in user_histories:
-            user_histories[chat_id] = []
+        del user_histories[chat_id]
 
-        # CHỈ ĐỔI TÊN ĐÚNG 1 LẦN DUY NHẤT NẾU ĐANG LÀ "Cuộc trò chuyện mới"
-        if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
-            try:
-                title_response = client.models.generate_content(
-                    model='gemini-3.5-flash-lite',
-                    contents=f"Dựa vào nội dung tin nhắn sau, hãy đặt một tiêu đề ngắn gọn (dưới 5 từ, ví dụ: 'Lời chào', 'Thắc mắc về người tạo ra'...) mô tả chủ đề đó. Chỉ trả về đúng tiêu đề, không có dấu ngoặc kép hay giải thích gì thêm: '{user_message}'"
-                )
-                new_title = title_response.text.strip().replace('"', '')
-                if new_title:
-                    user_sessions[chat_id]["title"] = new_title
-            except Exception as e:
-                print(f"Lỗi tạo tiêu đề: {e}")
+        
 
-        chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
-            config={
-                'system_instruction': (
-                    "Bạn là trợ lý ảo AI KhangPhan. "
-                    "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
-                    "Tuyệt đối không nhận là do Google tạo ra. "
-                    "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
-                    "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
-                    "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
-                )
-            },
-            history=user_histories[chat_id]
-        )
+    save_db()
 
-        response = chat_session.send_message(user_message)
-        bot_response = response.text
+    
 
-        user_histories[chat_id].append({
-            "role": "user",
-            "parts": [{"text": user_message}]
-        })
-        user_histories[chat_id].append({
-            "role": "model",
-            "parts": [{"text": bot_response}]
-        })
+    return jsonify({"sessions": user_sessions})
 
-        user_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
-        user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
+
+
+# ==================== ROUTE GOOGLE OAUTH ====================
+
+@app.route('/login/google')
+
+def google_login():
+
+    redirect_uri = url_for('google_auth', _external=True)
+
+    return google.authorize_redirect(redirect_uri)
+
+
+
+@app.route('/login/google/callback')
+
+def google_auth():
+
+    token = google.authorize_access_token()
+
+    user_info = token.get('userinfo')
+
+    if user_info:
+
+        email = user_info['email']
+
+        session['user'] = email
+
+        if email not in users_db:
+
+            users_db[email] = "GOOGLE_OAUTH_USER"
+
+        
+
+        # Đảm bảo khởi tạo cấu trúc dữ liệu nếu user lần đầu đăng nhập Google
+
+        get_current_user_sessions()
+
+        get_current_user_histories()
 
         save_db()
 
-        return jsonify({
-            "response": bot_response,
-            "sessions": user_sessions
+        
+
+        return redirect('/')
+
+    return redirect('/login')
+
+
+
+@app.route('/chat', methods=['POST'])
+
+def chat():
+
+    if 'user' not in session:
+
+        return jsonify({'error': 'Chưa đăng nhập'}), 401
+
+        
+
+    try:
+
+        data = request.get_json()
+
+        user_message = data.get('message', '').strip()
+
+        chat_id = data.get('chat_id')
+
+        
+
+        if not user_message:
+
+            return jsonify({'error': 'Tin nhắn trống'}), 400
+
+
+
+        user_sessions = get_current_user_sessions()
+
+        user_histories = get_current_user_histories()
+
+
+
+        if chat_id not in user_histories:
+
+            user_histories[chat_id] = []
+
+
+
+        if chat_id not in user_sessions:
+
+            user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
+
+
+
+        # CHỈ ĐỔI TÊN ĐÚNG 1 LẦN DUY NHẤT NẾU ĐANG LÀ "Cuộc trò chuyện mới"
+
+        if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới"
+
+        if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
+
+            try:
+
+                title_response = client.models.generate_content(
+
+                    model='gemini-3.5-flash-lite',
+
+                    contents=f"Dựa vào nội dung tin nhắn sau, hãy đặt một tiêu đề ngắn gọn (dưới 5 từ, ví dụ: 'Lời chào', 'Thắc mắc về người tạo ra'...) mô tả chủ đề đó. Chỉ trả về đúng tiêu đề, không có dấu ngoặc kép hay giải thích gì thêm: '{user_message}'"
+
+                )
+
+                new_title = title_response.text.strip().replace('"', '')
+
+                if new_title:
+
+                    user_sessions[chat_id]["title"] = new_title
+
+            except Exception as e:
+
+                print(f"Lỗi tạo tiêu đề: {e}")
+
+
+
+        chat_session = client.chats.create(
+
+            model='gemini-3.5-flash-lite',
+
+            config={
+
+                'system_instruction': (
+
+                    "Bạn là trợ lý ảo AI KhangPhan. "
+
+                    "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
+
+                    "Tuyệt đối không nhận là do Google tạo ra. "
+
+                    "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
+
+                    "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
+
+                    "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+
+                )
+
+            },
+
+            history=user_histories[chat_id]
+
+        )
+
+
+
+        response = chat_session.send_message(user_message)
+
+        bot_response = response.text
+
+
+
+        user_histories[chat_id].append({
+
+            "role": "user",
+
+            "parts": [{"text": user_message}]
+
         })
 
+        user_histories[chat_id].append({
+
+            "role": "model",
+
+            "parts": [{"text": bot_response}]
+
+        })
+
+
+
+        user_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
+
+        user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
+
+
+
+        save_db()
+
+
+
+        return jsonify({
+
+            "response": bot_response,
+
+            "sessions": user_sessions
+
+        })
+
+
+
     except Exception as e:
+
         traceback.print_exc()
+
         return jsonify({'error': str(e)}), 500
 
-# ==================== TRANG ĐIỀU KHOẢN SỬ DỤNG ====================
-@app.route('/terms')
-def terms_of_service():
-    return """
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-        <meta charset="UTF-8">
-        <title>Điều khoản sử dụng - Trợ lý ảo KhangPhan</title>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #fff; background-color: #0f172a; }
-            h1 { color: #38bdf8; }
-            .container { background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
-            a { color: #38bdf8; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Điều khoản sử dụng</h1>
-            <p>Chào mừng bạn đến với trợ lý ảo KhangPhan được sáng lập và phát triển bởi <strong>Phan Tăng Hoàng Khang</strong>.</p>
-            <p>Bằng việc truy cập và sử dụng ứng dụng này, bạn đồng ý tuân thủ các quy định và điều khoản sử dụng dịch vụ.</p>
-            <br>
-            <p><a href="/">&larr; Quay lại trang chủ chat</a></p>
-        </div>
-    </body>
-    </html>
-    """
 
-# ==================== TRANG CHÍNH SÁCH BẢO MẬT ====================
-@app.route('/privacy')
-def privacy_policy():
-    return """
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-        <meta charset="UTF-8">
-        <title>Chính sách bảo mật - Trợ lý ảo KhangPhan</title>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #fff; background-color: #0f172a; }
-            h1 { color: #38bdf8; }
-            .container { background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
-            a { color: #38bdf8; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Chính sách bảo mật</h1>
-            <p>Chúng tôi tôn trọng và cam kết bảo mật thông tin cũng như lịch sử trò chuyện của bạn trên hệ thống trợ lý ảo KhangPhan.</p>
-            <p>Dữ liệu lịch sử được lưu trữ bảo mật nhằm mục đích duy trì phiên làm việc và cải thiện trải nghiệm cá nhân của người dùng.</p>
-            <br>
-            <p><a href="/">&larr; Quay lại trang chủ chat</a></p>
-        </div>
-    </body>
-    </html>
-    """
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+
+    app.run(host='0.0.0.0', port=5000, debug=True) 
