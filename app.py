@@ -1040,27 +1040,10 @@ def chat():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-    @app.route('/privacy')
+   @app.route('/privacy')
 def privacy_policy():
-    return """
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-        <meta charset="UTF-8">
-        <title>Chính sách bảo mật - AI KhangPhan</title>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; background: #0f172a; color: #f8fafc; }
-            h1 { color: #38bdf8; }
-        </style>
-    </head>
-    <body>
-        <h1>Chính sách bảo mật</h1>
-        <p>Ứng dụng AI KhangPhan tôn trọng và cam kết bảo vệ quyền riêng tư của người dùng.</p>
-        <p>Chúng tôi chỉ sử dụng thông tin tài khoản Google (Email, tên) để xác thực đăng nhập và lưu trữ lịch sử trò chuyện cá nhân của riêng bạn trên hệ thống.</p>
-        <p>Chúng tôi tuyệt đối không chia sẻ thông tin của bạn cho bất kỳ bên thứ ba nào.</p>
-    </body>
-    </html>
-    """
+    # Đảm bảo các dòng bên trong hàm này phải được thụt lề đều nhau (thường là 4 spaces)
+    return render_template('privacy.html')
    
     @app.route('/terms')
 def terms_of_service():
