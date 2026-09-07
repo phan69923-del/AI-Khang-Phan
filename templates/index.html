@@ -92,7 +92,7 @@
             filter: none;
         }
 
-        /* Sidebar với hiệu ứng trượt mượt mà và an toàn cho mobile */
+        /* Sidebar */
         .sidebar {
             width: 260px;
             background-color: #1e1f20;
@@ -225,7 +225,7 @@
             background-color: #38393a;
         }
 
-        /* Main Chat Area với hiệu ứng co giãn đều */
+        /* Main Chat Area */
         .main-chat {
             margin-left: 260px;
             width: calc(100% - 260px);
@@ -252,7 +252,6 @@
             gap: 12px;
         }
 
-        /* Nút toggle mở/đóng sidebar */
         .sidebar-toggle-btn {
             background: none;
             border: none;
@@ -354,7 +353,6 @@
             background-color: #2b2c2d;
         }
 
-        /* Responsive cho điện thoại (Màn hình nhỏ hơn 768px) */
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -385,7 +383,7 @@
         <div class="chat-history" id="chatHistory">
             <div class="history-item active">
                 <i class="fa-regular fa-message"></i>
-                <span class="history-text">Đoạn chat mẫu đầu tiên</span>
+                <span class="history-text">Cuộc trò chuyện mới</span>
             </div>
         </div>
 
@@ -425,9 +423,8 @@
     </div>
 
     <script>
-        let currentChatId = 1;
+        let currentChatId = 'chat_' + Date.now();
 
-        // Hàm hiệu ứng đóng mở Sidebar linh hoạt cho cả PC và Mobile
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const mainChat = document.getElementById('mainChat');
@@ -468,9 +465,49 @@
         }
 
         function startNewChat() {
+            currentChatId = 'chat_' + Date.now();
             document.getElementById('chatMessages').innerHTML = `
                 <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
             `;
+            // Tạo một session mới mặc định ở phía client nếu cần
+            renderSessions({
+                [currentChatId]: { title: "Cuộc trò chuyện mới", messages: [] }
+            });
+        }
+
+        function renderSessions(sessions) {
+            const chatHistoryContainer = document.getElementById('chatHistory');
+            chatHistoryContainer.innerHTML = '';
+
+            for (const [id, sessionData] of Object.entries(sessions)) {
+                const isActive = id === currentChatId ? 'active' : '';
+                const historyItem = document.createElement('div');
+                historyItem.className = `history-item ${isActive}`;
+                historyItem.onclick = () => switchChat(id, sessions);
+                
+                historyItem.innerHTML = `
+                    <i class="fa-regular fa-message"></i>
+                    <span class="history-text">${sessionData.title || 'Cuộc trò chuyện mới'}</span>
+                `;
+                chatHistoryContainer.appendChild(historyItem);
+            }
+        }
+
+        function switchChat(chatId, sessions) {
+            currentChatId = chatId;
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+
+            if (sessions[chatId] && sessions[chatId].messages) {
+                sessions[chatId].messages.forEach(msg => {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = msg.role === 'user' ? 'message user' : 'message bot';
+                    msgDiv.textContent = msg.text;
+                    chatMessages.appendChild(msgDiv);
+                });
+            }
+            renderSessions(sessions);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         async function sendMessage() {
@@ -509,6 +546,11 @@
                 } else {
                     botMsg.textContent = "Xin lỗi, tôi không nhận được phản hồi từ hệ thống.";
                 }
+
+                if (data.sessions) {
+                    renderSessions(data.sessions);
+                }
+
             } catch (error) {
                 botMsg.textContent = "Lỗi kết nối mạng!";
             }
