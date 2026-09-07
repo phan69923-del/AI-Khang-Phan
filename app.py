@@ -953,11 +953,25 @@ def chat():
         if not user_message:
             return jsonify({'error': 'Tin nhắn trống'}), 400
 
-        if chat_id in chat_sessions and chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
-            chat_sessions[chat_id]["title"] = user_message[:25] + ('...' if len(user_message) > 25 else '')
-
         if chat_id not in server_histories:
             server_histories[chat_id] = []
+
+        if chat_id not in chat_sessions:
+            chat_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
+
+        # Tự động nhờ Gemini đặt tiêu đề thông minh dựa trên nội dung tin nhắn đầu tiên
+        current_messages = chat_sessions[chat_id].get("messages", [])
+        if chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới" or len(current_messages) <= 2:
+            try:
+                title_response = client.models.generate_content(
+                    model='gemini-3.5-flash-lite',
+                    contents=f"Dựa vào nội dung tin nhắn sau, hãy đặt một tiêu đề ngắn gọn (dưới 5 từ, ví dụ: 'Lời chào', 'Thắc mắc về người tạo ra', 'Lập trình Python'...) mô tả chủ đề đó. Chỉ trả về đúng tiêu đề, không có dấu ngoặc kép hay giải thích gì thêm: '{user_message}'"
+                )
+                new_title = title_response.text.strip().replace('"', '')
+                if new_title:
+                    chat_sessions[chat_id]["title"] = new_title
+            except Exception as e:
+                print(f"Lỗi tạo tiêu đề: {e}")
 
         chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
@@ -985,9 +999,6 @@ def chat():
             "role": "model",
             "parts": [{"text": bot_response}]
         })
-
-        if chat_id not in chat_sessions:
-            chat_sessions[chat_id] = {"title": user_message[:25], "messages": []}
 
         chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
         chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
