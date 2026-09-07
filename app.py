@@ -24,11 +24,34 @@ google = oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
-# Load bộ nhớ toàn cục từ database
+# Load bộ nhớ toàn cục từ database và chuẩn hóa cấu trúc phân theo user
 db = khangphan_memory.load_memory_data()
-chat_sessions = db.setdefault("sessions", {})        # Lưu tiêu đề & tin nhắn giao diện
-server_histories = db.setdefault("histories", {})    # Lưu bộ nhớ ngữ cảnh Gemini
-users_db = db.setdefault("users", {})                # Lưu tài khoản đăng ký (email: password)
+users_db = db.setdefault("users", {})          # Lưu tài khoản đăng ký (email: password)
+all_chat_sessions = db.setdefault("sessions", {})  # Lưu danh sách chat theo từng user
+all_server_histories = db.setdefault("histories", {}) # Lưu lịch sử Gemini theo từng user
+
+def get_current_user_sessions():
+    user = session.get('user')
+    if not user:
+        return {}
+    if user not in all_chat_sessions:
+        all_chat_sessions[user] = {}
+    return all_chat_sessions[user]
+
+def get_current_user_histories():
+    user = session.get('user')
+    if not user:
+        return {}
+    if user not in all_server_histories:
+        all_server_histories[user] = {}
+    return all_server_histories[user]
+
+def save_db():
+    khangphan_memory.save_memory_data({
+        "sessions": all_chat_sessions,
+        "histories": all_server_histories,
+        "users": users_db
+    })
 
 # ==================== GIAO DIỆN LOGIN / REGISTER ====================
 LOGIN_HTML_TEMPLATE = """
@@ -829,7 +852,8 @@ CHAT_HTML_TEMPLATE = """
 def index():
     if 'user' not in session:
         return redirect(url_for('login'))
-    return render_template_string(CHAT_HTML_TEMPLATE, sessions=chat_sessions)
+    user_sessions = get_current_user_sessions()
+    return render_template_string(CHAT_HTML_TEMPLATE, sessions=user_sessions)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -861,11 +885,10 @@ def register():
     users_db[email] = password
     session['user'] = email
     
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions, 
-        "histories": server_histories, 
-        "users": users_db
-    })
+    # Khởi tạo vùng nhớ rỗng cho user mới
+    get_current_user_sessions()
+    get_current_user_histories()
+    save_db()
     
     return jsonify({"success": True, "redirect": "/"})
 
@@ -882,19 +905,18 @@ def new_chat():
     data = request.get_json() or {}
     chat_id = data.get('chat_id') or f"chat_{os.urandom(4).hex()}"
     
-    chat_sessions[chat_id] = {
+    user_sessions = get_current_user_sessions()
+    user_histories = get_current_user_histories()
+    
+    user_sessions[chat_id] = {
         "title": "Cuộc trò chuyện mới",
         "messages": []
     }
-    server_histories[chat_id] = []
+    user_histories[chat_id] = []
     
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions,
-        "histories": server_histories,
-        "users": users_db
-    })
+    save_db()
     
-    return jsonify({"sessions": chat_sessions, "chat_id": chat_id})
+    return jsonify({"sessions": user_sessions, "chat_id": chat_id})
 
 @app.route('/delete_chat', methods=['POST'])
 def delete_chat():
@@ -904,18 +926,17 @@ def delete_chat():
     data = request.get_json() or {}
     chat_id = data.get('chat_id')
     
-    if chat_id in chat_sessions:
-        del chat_sessions[chat_id]
-    if chat_id in server_histories:
-        del server_histories[chat_id]
-        
-    khangphan_memory.save_memory_data({
-        "sessions": chat_sessions,
-        "histories": server_histories,
-        "users": users_db
-    })
+    user_sessions = get_current_user_sessions()
+    user_histories = get_current_user_histories()
     
-    return jsonify({"sessions": chat_sessions})
+    if chat_id in user_sessions:
+        del user_sessions[chat_id]
+    if chat_id in user_histories:
+        del user_histories[chat_id]
+        
+    save_db()
+    
+    return jsonify({"sessions": user_sessions})
 
 # ==================== ROUTE GOOGLE OAUTH ====================
 @app.route('/login/google')
@@ -932,11 +953,12 @@ def google_auth():
         session['user'] = email
         if email not in users_db:
             users_db[email] = "GOOGLE_OAUTH_USER"
-            khangphan_memory.save_memory_data({
-                "sessions": chat_sessions, 
-                "histories": server_histories, 
-                "users": users_db
-            })
+        
+        # Đảm bảo khởi tạo cấu trúc dữ liệu nếu user lần đầu đăng nhập Google
+        get_current_user_sessions()
+        get_current_user_histories()
+        save_db()
+        
         return redirect('/')
     return redirect('/login')
 
@@ -953,14 +975,17 @@ def chat():
         if not user_message:
             return jsonify({'error': 'Tin nhắn trống'}), 400
 
-        if chat_id not in server_histories:
-            server_histories[chat_id] = []
+        user_sessions = get_current_user_sessions()
+        user_histories = get_current_user_histories()
 
-        if chat_id not in chat_sessions:
-            chat_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
+        if chat_id not in user_histories:
+            user_histories[chat_id] = []
+
+        if chat_id not in user_sessions:
+            user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
 
         # CHỈ ĐỔI TÊN ĐÚNG 1 LẦN DUY NHẤT NẾU ĐANG LÀ "Cuộc trò chuyện mới"
-        if chat_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
+        if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_response = client.models.generate_content(
                     model='gemini-3.5-flash-lite',
@@ -968,12 +993,12 @@ def chat():
                 )
                 new_title = title_response.text.strip().replace('"', '')
                 if new_title:
-                    chat_sessions[chat_id]["title"] = new_title
+                    user_sessions[chat_id]["title"] = new_title
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
         chat_session = client.chats.create(
-            model='gemini-3.5-flash-lite',
+            model='gemini-2.5-flash',
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
@@ -984,37 +1009,34 @@ def chat():
                     "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
                 )
             },
-            history=server_histories[chat_id]
+            history=user_histories[chat_id]
         )
 
         response = chat_session.send_message(user_message)
         bot_response = response.text
 
-        server_histories[chat_id].append({
+        user_histories[chat_id].append({
             "role": "user",
             "parts": [{"text": user_message}]
         })
-        server_histories[chat_id].append({
+        user_histories[chat_id].append({
             "role": "model",
             "parts": [{"text": bot_response}]
         })
 
-        chat_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
-        chat_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
+        user_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
+        user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
 
-        khangphan_memory.save_memory_data({
-            "sessions": chat_sessions,
-            "histories": server_histories,
-            "users": users_db
-        })
+        save_db()
 
         return jsonify({
             "response": bot_response,
-            "sessions": chat_sessions
+            "sessions": user_sessions
         })
 
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
