@@ -988,7 +988,7 @@ def chat():
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_response = client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-3.5-flash-lite',
                     contents=f"Dựa vào nội dung tin nhắn sau, hãy đặt một tiêu đề ngắn gọn (dưới 5 từ, ví dụ: 'Lời chào', 'Thắc mắc về người tạo ra'...) mô tả chủ đề đó. Chỉ trả về đúng tiêu đề, không có dấu ngoặc kép hay giải thích gì thêm: '{user_message}'"
                 )
                 new_title = title_response.text.strip().replace('"', '')
@@ -998,7 +998,7 @@ def chat():
                 print(f"Lỗi tạo tiêu đề: {e}")
 
         chat_session = client.chats.create(
-            model='gemini-2.5-flash',
+            model='gemini-3.5-flash-lite',
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
