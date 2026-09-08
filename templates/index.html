@@ -85,17 +85,9 @@
         body.light-mode .send-btn {
             color: #0b57d0;
         }
-        body.light-mode .sidebar-toggle-btn:hover {
-            background-color: #e2e8f0;
-        }
-        body.light-mode .sidebar-toggle-btn img {
-            filter: none;
-        }
-        body.light-mode .sidebar-close-btn {
+        body.light-mode .history-actions button:hover {
+            background-color: #cbd5e1;
             color: #1f1f1f;
-        }
-        body.light-mode .sidebar-close-btn:hover {
-            background-color: #e2e8f0;
         }
 
         /* Overlay nền mờ trên mobile */
@@ -165,7 +157,6 @@
             font-size: 15px;
         }
 
-        /* Nút đóng sidebar trên mobile */
         .sidebar-close-btn {
             display: none;
             background: none;
@@ -218,6 +209,7 @@
             cursor: pointer;
             margin-top: 5px;
             transition: background 0.2s;
+            position: relative;
         }
 
         .history-item:hover, .history-item.active {
@@ -230,6 +222,32 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        /* Nút hành động sửa/xóa ẩn hiện khi hover */
+        .history-actions {
+            display: none;
+            gap: 4px;
+        }
+
+        .history-item:hover .history-actions {
+            display: flex;
+        }
+
+        .history-actions button {
+            background: none;
+            border: none;
+            color: #aaaaaa;
+            cursor: pointer;
+            padding: 4px 6px;
+            font-size: 12px;
+            border-radius: 4px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .history-actions button:hover {
+            background-color: #38393a;
+            color: #ffffff;
         }
 
         .sidebar-footer {
@@ -413,11 +431,13 @@
                 margin-left: 0 !important;
                 width: 100% !important;
             }
+            .history-actions {
+                display: flex; /* Luôn hiển thị trên mobile vì không có sự kiện hover */
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Lớp phủ nền mờ khi mở mobile sidebar -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
     <div class="sidebar" id="sidebar">
@@ -427,7 +447,6 @@
                     <img src="https://via.placeholder.com/28" alt="Logo">
                     <span>AI KhangPhan</span>
                 </div>
-                <!-- Nút X đóng sidebar trên mobile -->
                 <button class="sidebar-close-btn" onclick="toggleSidebar()">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -438,7 +457,7 @@
         </div>
         
         <div class="chat-history" id="chatHistory">
-            <!-- Danh sách lịch sử chat sẽ được render tự động ở đây -->
+            <!-- Render danh sách chat động -->
         </div>
 
         <div class="sidebar-footer">
@@ -464,7 +483,7 @@
 
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">
-                Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?
+                Chào bạn! Tôi có thể giúp gì cho bạn hôm hôm nay?
             </div>
         </div>
 
@@ -480,10 +499,9 @@
         let initialId = 'chat_' + Date.now();
         let currentChatId = initialId;
         
-        // Quản lý kho lưu trữ session toàn cục ở Frontend
         let sessions = {
             [initialId]: { 
-                title: "Cuộc trò chuyện mới", 
+                title: "Lời chào", 
                 messages: [{ role: 'bot', text: "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?" }] 
             }
         };
@@ -497,19 +515,11 @@
             if (window.innerWidth <= 768) {
                 sidebar.classList.toggle('mobile-open');
                 overlay.classList.toggle('active');
-                if (sidebar.classList.contains('mobile-open')) {
-                    toggleIcon.src = "/static/icon_dong.png";
-                } else {
-                    toggleIcon.src = "/static/icon_mo.png";
-                }
+                toggleIcon.src = sidebar.classList.contains('mobile-open') ? "/static/icon_dong.png" : "/static/icon_mo.png";
             } else {
                 sidebar.classList.toggle('closed');
                 mainChat.classList.toggle('expanded');
-                if (sidebar.classList.contains('closed')) {
-                    toggleIcon.src = "/static/icon_mo.png";
-                } else {
-                    toggleIcon.src = "/static/icon_dong.png";
-                }
+                toggleIcon.src = sidebar.classList.contains('closed') ? "/static/icon_mo.png" : "/static/icon_dong.png";
             }
         }
 
@@ -536,7 +546,6 @@
                 messages: [{ role: 'bot', text: "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?" }]
             };
             
-            // Hiển thị lại giao diện màn hình chat cho đoạn chat mới
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = `
                 <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
@@ -557,6 +566,10 @@
                 historyItem.innerHTML = `
                     <i class="fa-regular fa-message"></i>
                     <span class="history-text">${sessionData.title || 'Cuộc trò chuyện mới'}</span>
+                    <div class="history-actions" onclick="event.stopPropagation()">
+                        <button title="Đổi tên" onclick="renameChat('${id}')"><i class="fa-solid fa-pen"></i></button>
+                        <button title="Xóa" onclick="deleteChat('${id}')"><i class="fa-solid fa-trash"></i></button>
+                    </div>
                 `;
                 chatHistoryContainer.appendChild(historyItem);
             }
@@ -579,6 +592,36 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
+        // Tính năng Đổi tên đoạn chat
+        function renameChat(chatId) {
+            const currentTitle = sessions[chatId]?.title || "Cuộc trò chuyện mới";
+            const newTitle = prompt("Nhập tên mới cho đoạn chat:", currentTitle);
+            if (newTitle !== null && newTitle.trim() !== "") {
+                sessions[chatId].title = newTitle.trim();
+                renderSessions(sessions);
+            }
+        }
+
+        // Tính năng Xóa đoạn chat
+        function deleteChat(chatId) {
+            if (Object.keys(sessions).length <= 1) {
+                alert("Bạn phải giữ lại ít nhất một cuộc trò chuyện!");
+                return;
+            }
+
+            if (confirm("Bạn có chắc chắn muốn xóa cuộc trò chuyện này không?")) {
+                delete sessions[chatId];
+                
+                // Nếu đang đứng ở chat bị xóa thì chuyển sang chat đầu tiên còn lại
+                if (currentChatId === chatId) {
+                    const remainingIds = Object.keys(sessions);
+                    switchChat(remainingIds[0], sessions);
+                } else {
+                    renderSessions(sessions);
+                }
+            }
+        }
+
         async function sendMessage() {
             const input = document.getElementById('userInput');
             const messageText = input.value.trim();
@@ -586,19 +629,16 @@
 
             const chatMessages = document.getElementById('chatMessages');
             
-            // Thêm tin nhắn user vào DOM
             const userMsg = document.createElement('div');
             userMsg.className = 'message user';
             userMsg.textContent = messageText;
             chatMessages.appendChild(userMsg);
 
-            // Lưu vào session hiện tại
             if (!sessions[currentChatId]) {
                 sessions[currentChatId] = { title: messageText.substring(0, 30), messages: [] };
             }
             sessions[currentChatId].messages.push({ role: 'user', text: messageText });
 
-            // Nếu đây là tin nhắn đầu tiên, cập nhật tiêu đề cho đoạn chat ở sidebar
             if (sessions[currentChatId].messages.filter(m => m.role === 'user').length === 1) {
                 sessions[currentChatId].title = messageText.length > 25 ? messageText.substring(0, 25) + '...' : messageText;
             }
@@ -607,7 +647,6 @@
             input.style.height = 'auto';
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            // Tạo khung chờ "Đang suy nghĩ..." từ bot
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
             botMsg.textContent = "Đang suy nghĩ...";
@@ -631,7 +670,6 @@
                     sessions[currentChatId].messages.push({ role: 'bot', text: botMsg.textContent });
                 }
 
-                // Nếu backend trả về danh sách session tổng hợp thì đồng bộ lại
                 if (data.sessions) {
                     sessions = data.sessions;
                 }
@@ -645,7 +683,6 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // Khởi tạo render menu lần đầu tiên khi load trang
         renderSessions(sessions);
     </script>
 </body>
