@@ -3,6 +3,8 @@ import traceback
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
 from google import genai
 from authlib.integrations.flask_client import OAuth
+from flask import redirect, url_for, session
+
 
 # Import module bộ nhớ riêng
 import khangphan_memory
@@ -52,6 +54,12 @@ def save_db():
         "histories": all_server_histories,
         "users": users_db
     })
+    @app.route('/logout')
+def logout():
+    # Xóa sạch toàn bộ thông tin phiên làm việc của người dùng
+    session.clear()
+    # Điều hướng mượt mà về trang đăng nhập
+    return redirect(url_for('login'))
 
 # ==================== GIAO DIỆN LOGIN / REGISTER ====================
 LOGIN_HTML_TEMPLATE = """
