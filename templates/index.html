@@ -438,10 +438,7 @@
         </div>
         
         <div class="chat-history" id="chatHistory">
-            <div class="history-item active">
-                <i class="fa-regular fa-message"></i>
-                <span class="history-text">Cuộc trò chuyện mới</span>
-            </div>
+            <!-- Danh sách lịch sử chat sẽ được render tự động ở đây -->
         </div>
 
         <div class="sidebar-footer">
@@ -480,7 +477,16 @@
     </div>
 
     <script>
-        let currentChatId = 'chat_' + Date.now();
+        let initialId = 'chat_' + Date.now();
+        let currentChatId = initialId;
+        
+        // Quản lý kho lưu trữ session toàn cục ở Frontend
+        let sessions = {
+            [initialId]: { 
+                title: "Cuộc trò chuyện mới", 
+                messages: [{ role: 'bot', text: "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?" }] 
+            }
+        };
 
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -525,23 +531,28 @@
 
         function startNewChat() {
             currentChatId = 'chat_' + Date.now();
-            document.getElementById('chatMessages').innerHTML = `
+            sessions[currentChatId] = {
+                title: "Cuộc trò chuyện mới",
+                messages: [{ role: 'bot', text: "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?" }]
+            };
+            
+            // Hiển thị lại giao diện màn hình chat cho đoạn chat mới
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = `
                 <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
             `;
-            renderSessions({
-                [currentChatId]: { title: "Cuộc trò chuyện mới", messages: [] }
-            });
+            renderSessions(sessions);
         }
 
-        function renderSessions(sessions) {
+        function renderSessions(sessionList) {
             const chatHistoryContainer = document.getElementById('chatHistory');
             chatHistoryContainer.innerHTML = '';
 
-            for (const [id, sessionData] of Object.entries(sessions)) {
+            for (const [id, sessionData] of Object.entries(sessionList)) {
                 const isActive = id === currentChatId ? 'active' : '';
                 const historyItem = document.createElement('div');
                 historyItem.className = `history-item ${isActive}`;
-                historyItem.onclick = () => switchChat(id, sessions);
+                historyItem.onclick = () => switchChat(id, sessionList);
                 
                 historyItem.innerHTML = `
                     <i class="fa-regular fa-message"></i>
@@ -551,20 +562,20 @@
             }
         }
 
-        function switchChat(chatId, sessions) {
+        function switchChat(chatId, sessionList) {
             currentChatId = chatId;
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = '';
 
-            if (sessions[chatId] && sessions[chatId].messages) {
-                sessions[chatId].messages.forEach(msg => {
+            if (sessionList[chatId] && sessionList[chatId].messages) {
+                sessionList[chatId].messages.forEach(msg => {
                     const msgDiv = document.createElement('div');
                     msgDiv.className = msg.role === 'user' ? 'message user' : 'message bot';
                     msgDiv.textContent = msg.text;
                     chatMessages.appendChild(msgDiv);
                 });
             }
-            renderSessions(sessions);
+            renderSessions(sessionList);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
@@ -575,15 +586,28 @@
 
             const chatMessages = document.getElementById('chatMessages');
             
+            // Thêm tin nhắn user vào DOM
             const userMsg = document.createElement('div');
             userMsg.className = 'message user';
             userMsg.textContent = messageText;
             chatMessages.appendChild(userMsg);
 
+            // Lưu vào session hiện tại
+            if (!sessions[currentChatId]) {
+                sessions[currentChatId] = { title: messageText.substring(0, 30), messages: [] };
+            }
+            sessions[currentChatId].messages.push({ role: 'user', text: messageText });
+
+            // Nếu đây là tin nhắn đầu tiên, cập nhật tiêu đề cho đoạn chat ở sidebar
+            if (sessions[currentChatId].messages.filter(m => m.role === 'user').length === 1) {
+                sessions[currentChatId].title = messageText.length > 25 ? messageText.substring(0, 25) + '...' : messageText;
+            }
+
             input.value = '';
             input.style.height = 'auto';
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
+            // Tạo khung chờ "Đang suy nghĩ..." từ bot
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
             botMsg.textContent = "Đang suy nghĩ...";
@@ -601,13 +625,18 @@
                 
                 if (data.response) {
                     botMsg.textContent = data.response;
+                    sessions[currentChatId].messages.push({ role: 'bot', text: data.response });
                 } else {
                     botMsg.textContent = "Xin lỗi, tôi không nhận được phản hồi từ hệ thống.";
+                    sessions[currentChatId].messages.push({ role: 'bot', text: botMsg.textContent });
                 }
 
+                // Nếu backend trả về danh sách session tổng hợp thì đồng bộ lại
                 if (data.sessions) {
-                    renderSessions(data.sessions);
+                    sessions = data.sessions;
                 }
+
+                renderSessions(sessions);
 
             } catch (error) {
                 botMsg.textContent = "Lỗi kết nối mạng!";
@@ -615,6 +644,9 @@
             
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
+
+        // Khởi tạo render menu lần đầu tiên khi load trang
+        renderSessions(sessions);
     </script>
 </body>
 </html>
