@@ -54,11 +54,9 @@ def save_db():
         "histories": all_server_histories,
         "users": users_db
     })
-    @app.route('/logout')
+@app.route('/logout')
 def logout():
-    # Xóa sạch toàn bộ thông tin phiên làm việc của người dùng
     session.clear()
-    # Điều hướng mượt mà về trang đăng nhập
     return redirect(url_for('login'))
 
 # ==================== GIAO DIỆN LOGIN / REGISTER ====================
