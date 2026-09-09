@@ -896,7 +896,7 @@ app = Flask(__name__)
 app.secret_key = "secret_key"
 
 # Khởi tạo client Gemini API
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY")) client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 DB_FILE = "database.json"
 
