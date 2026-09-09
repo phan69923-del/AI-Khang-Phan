@@ -15,6 +15,7 @@ DB_FILE = "database.json"
 # ==============================================================================
 # TEMPLATE 1: GIAO DIỆN ĐĂNG NHẬP & ĐĂNG KÝ (LOGIN_HTML_TEMPLATE)
 # ==============================================================================
+# Cập nhật phần LOGIN_HTML_TEMPLATE thêm nút Google Login
 LOGIN_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -46,7 +47,7 @@ LOGIN_HTML_TEMPLATE = """
         }
         .auth-header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
         .auth-header i {
             font-size: 48px;
@@ -68,7 +69,7 @@ LOGIN_HTML_TEMPLATE = """
             background: rgba(15, 23, 42, 0.6);
             padding: 4px;
             border-radius: 12px;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
         .tab-btn {
             flex: 1;
@@ -86,11 +87,11 @@ LOGIN_HTML_TEMPLATE = """
             color: #0f172a;
         }
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         .form-group label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             font-size: 13px;
             color: #cbd5e1;
             font-weight: 500;
@@ -136,6 +137,47 @@ LOGIN_HTML_TEMPLATE = """
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(56, 189, 248, 0.3);
         }
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 20px 0;
+            color: #64748b;
+            font-size: 13px;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #334155;
+        }
+        .divider::before { margin-right: 10px; }
+        .divider::after { margin-left: 10px; }
+        
+        .google-btn {
+            width: 100%;
+            padding: 11px;
+            background: #ffffff;
+            color: #1e293b;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: background 0.2s, transform 0.2s;
+            text-decoration: none;
+        }
+        .google-btn:hover {
+            background: #f1f5f9;
+            transform: translateY(-1px);
+        }
+        .google-btn i {
+            color: #ea4335;
+            font-size: 16px;
+        }
         .alert-message {
             padding: 10px 14px;
             border-radius: 8px;
@@ -149,7 +191,7 @@ LOGIN_HTML_TEMPLATE = """
             color: #fca5a5;
         }
         .footer-links {
-            margin-top: 25px;
+            margin-top: 20px;
             text-align: center;
             font-size: 12px;
             color: #64748b;
@@ -195,9 +237,16 @@ LOGIN_HTML_TEMPLATE = """
             <button type="submit" id="submitBtn" class="submit-btn">Đăng nhập</button>
         </form>
 
+        <div class="divider">hoặc</div>
+
+        <!-- Nút Google OAuth 2.0 -->
+        <a href="/login/google" class="google-btn">
+            <i class="fa-brands fa-google"></i> Đăng nhập bằng Google
+        </a>
+
         <div class="footer-links">
             <p><a href="/privacy">Chính sách bảo mật</a> | <a href="/terms">Điều khoản dịch vụ</a></p>
-            <p style="margin-top: 8px;">&copy; 2026 AI KhangPhan - Phan Tăng Hoàng Khang</p>
+            <p style="margin-top: 6px;">&copy; 2026 AI KhangPhan - Phan Tăng Hoàng Khang</p>
         </div>
     </div>
 
@@ -206,8 +255,7 @@ LOGIN_HTML_TEMPLATE = """
 
         function switchTab(mode) {
             currentMode = mode;
-            const alertBox = document.getElementById('alertBox');
-            alertBox.style.display = 'none';
+            document.getElementById('alertBox').style.display = 'none';
 
             if (mode === 'login') {
                 document.getElementById('loginTabBtn').classList.add('active');
@@ -227,21 +275,19 @@ LOGIN_HTML_TEMPLATE = """
             const alertBox = document.getElementById('alertBox');
             
             alertBox.style.display = 'none';
-
             const endpoint = currentMode === 'login' ? '/login' : '/register';
+            
             try {
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
-
                 const data = await response.json();
-
                 if (response.ok && data.success) {
                     window.location.href = data.redirect || '/';
                 } else {
-                    alertBox.innerText = data.error || 'Có lỗi xảy ra, vui lòng thử lại!';
+                    alertBox.innerText = data.error || 'Có lỗi xảy ra!';
                     alertBox.style.display = 'block';
                 }
             } catch (err) {
@@ -252,8 +298,6 @@ LOGIN_HTML_TEMPLATE = """
     </script>
 </body>
 </html>
-"""
-
 # ==============================================================================
 # TEMPLATE 2: GIAO DIỆN KHUNG CHAT AI (CHAT_HTML_TEMPLATE)
 # ==============================================================================
