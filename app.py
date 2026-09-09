@@ -965,7 +965,7 @@ def chat():
         chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
             config={
-                'system_instruction': (
+                'system_instruction': 
                     "Bạn là trợ lý ảo AI KhangPhan. "
                    import os
 import json
