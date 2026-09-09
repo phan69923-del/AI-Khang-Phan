@@ -1518,8 +1518,7 @@ def chat():
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
-        # Gọi Gemini AI phản hồi kèm theo System Instruction cố định
-        response = client.models.generate_content(
+      response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=user_message,
             config={
