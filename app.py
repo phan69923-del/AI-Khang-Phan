@@ -1,809 +1,955 @@
 import os
-import json
 import traceback
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
 from google import genai
+from authlib.integrations.flask_client import OAuth
+from flask import redirect, url_for, session
+from authlib.integrations.flask_client import OAuth
+
+# Cấu hình OAuth (Nhớ điền client_id và client_secret từ Google Cloud Console của sếp)
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID', 'YOUR_GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET', 'YOUR_GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
+
+@app.route('/login/google')
+def google_login():
+    redirect_uri = url_for('google_authorize', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/login/google/authorize')
+def google_authorize():
+    token = google.authorize_access_token()
+    resp = google.get('https://www.googleapis.com/oauth2/v1/userinfo')
+    user_info = resp.json()
+    email = user_info.get('email')
+    
+    if email:
+        # Tự động tạo hoặc đăng nhập tài khoản dựa vào email Google
+        if email not in users_db:
+            users_db[email] = "GOOGLE_OAUTH_USER"
+            save_db()
+        session['user'] = email
+        return redirect(url_for('index'))
+    return redirect(url_for('login'))
+
+
+# Import module bộ nhớ riêng
+import khangphan_memory
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "khangphan_secret_key_2026_07062014")
+app.secret_key = '07062014'  # Cần thiết để dùng session đăng nhập
 
-# Khởi tạo client Gemini với API key
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+# Khởi tạo client Gemini (Đảm bảo trên Render đã add biến môi trường GEMINI_API_KEY)
+api_key = os.environ.get("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key)
 
-DB_FILE = "database.json"
+# Cấu hình OAuth cho Google lấy trực tiếp từ biến môi trường của Render
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
 
-# ==============================================================================
-# TEMPLATE 1: GIAO DIỆN ĐĂNG NHẬP & ĐĂNG KÝ (LOGIN_HTML_TEMPLATE)
-# ==============================================================================
-# Cập nhật phần LOGIN_HTML_TEMPLATE thêm nút Google Login
+# Load bộ nhớ toàn cục từ database và chuẩn hóa cấu trúc phân theo user
+db = khangphan_memory.load_memory_data()
+users_db = db.setdefault("users", {})          # Lưu tài khoản đăng ký (email: password)
+all_chat_sessions = db.setdefault("sessions", {})  # Lưu danh sách chat theo từng user
+all_server_histories = db.setdefault("histories", {}) # Lưu lịch sử Gemini theo từng user
+
+def get_current_user_sessions():
+    user = session.get('user')
+    if not user:
+        return {}
+    if user not in all_chat_sessions:
+        all_chat_sessions[user] = {}
+    return all_chat_sessions[user]
+
+def get_current_user_histories():
+    user = session.get('user')
+    if not user:
+        return {}
+    if user not in all_server_histories:
+        all_server_histories[user] = {}
+    return all_server_histories[user]
+
+def save_db():
+    khangphan_memory.save_memory_data({
+        "sessions": all_chat_sessions,
+        "histories": all_server_histories,
+        "users": users_db
+    })
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+# ==================== GIAO DIỆN LOGIN / REGISTER ====================
 LOGIN_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đăng nhập / Đăng ký - AI KhangPhan</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <title>AI KHANG PHAN - Đăng Nhập</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #f8fafc;
-            padding: 20px;
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #0f172a; 
+            color: white; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
         }
-        .auth-container {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            width: 100%;
-            max-width: 420px;
-            padding: 40px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        .card { 
+            background: #1e293b; 
+            padding: 30px; 
+            border-radius: 12px; 
+            width: 340px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+            text-align: center; 
         }
-        .auth-header {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-        .auth-header i {
-            font-size: 48px;
-            color: #38bdf8;
-            margin-bottom: 12px;
-        }
-        .auth-header h2 {
-            font-size: 26px;
-            font-weight: 700;
-            color: #f8fafc;
-        }
-        .auth-header p {
-            color: #94a3b8;
-            font-size: 14px;
-            margin-top: 6px;
-        }
-        .tab-buttons {
-            display: flex;
-            background: rgba(15, 23, 42, 0.6);
-            padding: 4px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-        .tab-btn {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            background: transparent;
-            color: #94a3b8;
-            font-weight: 600;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .tab-btn.active {
-            background: #38bdf8;
-            color: #0f172a;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 6px;
-            font-size: 13px;
-            color: #cbd5e1;
-            font-weight: 500;
-        }
-        .input-wrapper {
-            position: relative;
-        }
-        .input-wrapper i {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #64748b;
-        }
-        .form-control {
-            width: 100%;
-            padding: 12px 16px 12px 42px;
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid #334155;
-            border-radius: 10px;
-            color: #fff;
-            font-size: 14px;
+        h2 { margin-bottom: 20px; color: #f8fafc; }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            border-radius: 6px; 
+            border: 1px solid #334155; 
+            background: #0f172a; 
+            color: white; 
+            box-sizing: border-box; 
             outline: none;
-            transition: border-color 0.3s;
         }
-        .form-control:focus {
-            border-color: #38bdf8;
+        input:focus { border-color: #38bdf8; }
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            margin-top: 10px; 
+            border-radius: 6px; 
+            border: none; 
+            background: #2563eb; 
+            color: white; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: 0.2s;
         }
-        .submit-btn {
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
-            border: none;
-            border-radius: 10px;
-            color: #0f172a;
-            font-weight: 700;
-            font-size: 15px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-top: 10px;
-        }
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(56, 189, 248, 0.3);
-        }
-        .divider {
-            display: flex;
-            align-items: center;
-            text-align: center;
-            margin: 20px 0;
-            color: #64748b;
-            font-size: 13px;
-        }
-        .divider::before, .divider::after {
-            content: '';
-            flex: 1;
-            border-bottom: 1px solid #334155;
-        }
-        .divider::before { margin-right: 10px; }
-        .divider::after { margin-left: 10px; }
-        
+        button:hover { background: #1d4ed8; }
         .google-btn {
-            width: 100%;
-            padding: 11px;
-            background: #ffffff;
-            color: #1e293b;
-            border: none;
-            border-radius: 10px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
+            background-color: #f1f5f9;
+            color: #0f172a;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
-            transition: background 0.2s, transform 0.2s;
+            font-weight: 600;
             text-decoration: none;
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 6px;
         }
-        .google-btn:hover {
-            background: #f1f5f9;
-            transform: translateY(-1px);
+        .google-btn:hover { background-color: #e2e8f0; }
+        .divider {
+            margin: 15px 0;
+            border-bottom: 1px solid #334155;
+            position: relative;
         }
-        .google-btn i {
-            color: #ea4335;
-            font-size: 16px;
-        }
-        .alert-message {
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 13px;
-            margin-bottom: 15px;
-            display: none;
-        }
-        .alert-error {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid #ef4444;
-            color: #fca5a5;
-        }
-        .footer-links {
-            margin-top: 20px;
-            text-align: center;
+        .divider span {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            padding: 0 10px;
             font-size: 12px;
-            color: #64748b;
+            color: #94a3b8;
         }
-        .footer-links a {
-            color: #38bdf8;
-            text-decoration: none;
-        }
+        .toggle { margin-top: 20px; font-size: 14px; color: #94a3b8; cursor: pointer; }
+        .toggle span { color: #38bdf8; text-decoration: underline; }
+        .error { color: #f87171; font-size: 14px; margin-top: 12px; min-height: 18px; }
     </style>
 </head>
 <body>
-    <div class="auth-container">
-        <div class="auth-header">
-            <i class="fa-solid fa-robot"></i>
-            <h2>AI KhangPhan</h2>
-            <p>Trợ lý trí tuệ nhân tạo thông minh</p>
-        </div>
 
-        <div class="tab-buttons">
-            <button class="tab-btn active" id="loginTabBtn" onclick="switchTab('login')">Đăng nhập</button>
-            <button class="tab-btn" id="registerTabBtn" onclick="switchTab('register')">Đăng ký</button>
-        </div>
+<div class="card">
+    <h2 id="form-title">Đăng Nhập AI</h2>
+    <input type="text" id="email" placeholder="Email / Tên đăng nhập" autocomplete="off">
+    <input type="password" id="password" placeholder="Mật khẩu" onkeypress="handleKeyPress(event)">
+    
+    <button id="submit-btn" onclick="handleSubmit()">Đăng Nhập</button>
+    
+    <div class="divider"><span>HOẶC</span></div>
 
-        <div id="alertBox" class="alert-message alert-error"></div>
+    <a href="/login/google" class="google-btn">
+        <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Đăng nhập với Google
+    </a>
 
-        <form id="authForm" onsubmit="handleAuth(event)">
-            <div class="form-group">
-                <label for="username">Tên tài khoản / Email</label>
-                <div class="input-wrapper">
-                    <i class="fa-solid fa-user"></i>
-                    <input type="text" id="username" class="form-control" placeholder="Nhập tài khoản của bạn" required>
-                </div>
-            </div>
+    <div class="error" id="error-msg"></div>
 
-            <div class="form-group">
-                <label for="password">Mật khẩu</label>
-                <div class="input-wrapper">
-                    <i class="fa-solid fa-lock"></i>
-                    <input type="password" id="password" class="form-control" placeholder="Nhập mật khẩu" required>
-                </div>
-            </div>
-
-            <button type="submit" id="submitBtn" class="submit-btn">Đăng nhập</button>
-        </form>
-
-        <div class="divider">hoặc</div>
-
-        <!-- Nút Google OAuth 2.0 -->
-        <a href="/login/google" class="google-btn">
-            <i class="fa-brands fa-google"></i> Đăng nhập bằng Google
-        </a>
-
-        <div class="footer-links">
-            <p><a href="/privacy">Chính sách bảo mật</a> | <a href="/terms">Điều khoản dịch vụ</a></p>
-            <p style="margin-top: 6px;">&copy; 2026 AI KhangPhan - Phan Tăng Hoàng Khang</p>
-        </div>
+    <div class="toggle" onclick="toggleForm()">
+        <span id="toggle-text">Chưa có tài khoản? Đăng ký ngay</span>
     </div>
+</div>
 
-    <script>
-        let currentMode = 'login';
+<script>
+    let isRegister = false;
 
-        function switchTab(mode) {
-            currentMode = mode;
-            document.getElementById('alertBox').style.display = 'none';
+    function toggleForm() {
+        isRegister = !isRegister;
+        document.getElementById('form-title').innerText = isRegister ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập AI';
+        document.getElementById('submit-btn').innerText = isRegister ? 'Đăng Ký' : 'Đăng Nhập';
+        document.getElementById('toggle-text').innerText = isRegister ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký ngay';
+        document.getElementById('error-msg').innerText = '';
+    }
 
-            if (mode === 'login') {
-                document.getElementById('loginTabBtn').classList.add('active');
-                document.getElementById('registerTabBtn').classList.remove('active');
-                document.getElementById('submitBtn').innerText = 'Đăng nhập';
+    function handleKeyPress(e) {
+        if (e.key === 'Enter') {
+            handleSubmit();
+        }
+    }
+
+    async function handleSubmit() {
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const errorMsg = document.getElementById('error-msg');
+        
+        if (!email || !password) {
+            errorMsg.innerText = 'Vui lòng nhập đầy đủ thông tin!';
+            return;
+        }
+
+        errorMsg.innerText = 'Đang xử lý...';
+        const endpoint = isRegister ? '/register' : '/login';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, username: email, password })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                window.location.href = data.redirect || '/';
             } else {
-                document.getElementById('registerTabBtn').classList.add('active');
-                document.getElementById('loginTabBtn').classList.remove('active');
-                document.getElementById('submitBtn').innerText = 'Đăng ký tài khoản';
+                errorMsg.innerText = data.error || data.message || 'Có lỗi xảy ra!';
             }
+        } catch (err) {
+            errorMsg.innerText = 'Lỗi kết nối máy chủ!';
         }
+    }
+</script>
 
-        async function handleAuth(event) {
-            event.preventDefault();
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value.trim();
-            const alertBox = document.getElementById('alertBox');
-            
-            alertBox.style.display = 'none';
-            const endpoint = currentMode === 'login' ? '/login' : '/register';
-            
-            try {
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-                const data = await response.json();
-                if (response.ok && data.success) {
-                    window.location.href = data.redirect || '/';
-                } else {
-                    alertBox.innerText = data.error || 'Có lỗi xảy ra!';
-                    alertBox.style.display = 'block';
-                }
-            } catch (err) {
-                alertBox.innerText = 'Không thể kết nối tới server!';
-                alertBox.style.display = 'block';
-            }
-        }
-    </script>
 </body>
 </html>
-# ==============================================================================
-# TEMPLATE 2: GIAO DIỆN KHUNG CHAT AI (CHAT_HTML_TEMPLATE)
-# ==============================================================================
+"""
+
+# ==================== GIAO DIỆN CHÍNH (CHAT AI) ====================
 CHAT_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI KhangPhan - Trợ lý Trí tuệ nhân tạo</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <title>AI KhangPhan - Trợ lý ảo thông minh</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-        body { display: flex; height: 100vh; background-color: #0f172a; color: #f8fafc; overflow: hidden; }
-        
-        /* Sidebar */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: #131314;
+            color: #e3e3e3;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        body.light-mode {
+            background-color: #ffffff;
+            color: #1f1f1f;
+        }
+        body.light-mode .sidebar {
+            background-color: #f0f4f9;
+            border-right: 1px solid #d9d9d9;
+        }
+        body.light-mode .sidebar-logo-container span,
+        body.light-mode .new-chat-btn,
+        body.light-mode .history-item {
+            color: #1f1f1f;
+        }
+        body.light-mode .new-chat-btn {
+            background-color: #e2e8f0;
+        }
+        body.light-mode .new-chat-btn:hover {
+            background-color: #cbd5e1;
+        }
+        body.light-mode .history-item:hover, 
+        body.light-mode .history-item.active {
+            background-color: #e2e8f0;
+        }
+        body.light-mode .sidebar-footer {
+            border-top: 1px solid #d9d9d9;
+            color: #555555;
+        }
+        body.light-mode .footer-btn {
+            background-color: #e2e8f0;
+            color: #1f1f1f;
+        }
+        body.light-mode .footer-btn:hover {
+            background-color: #cbd5e1;
+        }
+        body.light-mode .chat-header {
+            border-bottom: 1px solid #d9d9d9;
+            color: #444444;
+        }
+        body.light-mode .main-chat {
+            background-color: #ffffff;
+        }
+        body.light-mode .message.bot {
+            background-color: #f0f4f9;
+            color: #1f1f1f;
+            border: 1px solid #d9d9d9;
+        }
+        body.light-mode .message.user {
+            background-color: #e2e8f0;
+            color: #1f1f1f;
+        }
+        body.light-mode .chat-input-box {
+            background-color: #f0f4f9;
+            border: 1px solid #d9d9d9;
+        }
+        body.light-mode .chat-input-box textarea {
+            color: #1f1f1f;
+        }
+        body.light-mode .send-btn {
+            color: #0b57d0;
+        }
+        body.light-mode .sidebar-toggle-btn:hover {
+            background-color: #e2e8f0;
+        }
+        body.light-mode .sidebar-toggle-btn {
+            color: #1f1f1f;
+        }
+
         .sidebar {
-            width: 280px;
-            background-color: #1e293b;
+            width: 260px;
+            background-color: #1e1f20;
+            border-right: 1px solid #2b2c2d;
             display: flex;
             flex-direction: column;
-            border-right: 1px solid #334155;
-            transition: all 0.3s ease;
-        }
-        .sidebar-header {
-            padding: 20px;
-            display: flex;
-            align-items: center;
             justify-content: space-between;
-            border-bottom: 1px solid #334155;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding-bottom: env(safe-area-inset-bottom);
         }
-        .brand {
+
+        .sidebar.closed {
+            transform: translateX(-100%);
+        }
+
+        .sidebar-top {
+            padding: 16px;
+        }
+
+        .sidebar-logo-container {
             display: flex;
             align-items: center;
             gap: 10px;
-            font-weight: bold;
-            font-size: 18px;
-            color: #38bdf8;
+            padding: 8px 4px;
+            margin-bottom: 20px;
         }
+
+        .sidebar-logo-container i {
+            font-size: 20px;
+            color: #8ab4f8;
+        }
+
+        .sidebar-logo-container span {
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
         .new-chat-btn {
-            margin: 15px;
-            padding: 12px;
-            background: #38bdf8;
-            color: #0f172a;
-            border: none;
-            border-radius: 10px;
-            font-weight: bold;
-            cursor: pointer;
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: 0.2s;
+            gap: 10px;
+            background-color: #2b2c2d;
+            color: #ffffff;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 30px;
+            width: 100%;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
         }
-        .new-chat-btn:hover { background: #0284c7; color: #fff; }
-        .chat-list { flex: 1; overflow-y: auto; padding: 10px; }
-        .chat-item {
+
+        .new-chat-btn:hover {
+            background-color: #38393a;
+        }
+
+        .chat-history {
+            padding: 0 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .history-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 5px;
-            cursor: pointer;
-            color: #cbd5e1;
+            padding: 10px 12px;
+            border-radius: 20px;
             font-size: 14px;
+            color: #cccccc;
+            cursor: pointer;
+            margin-top: 5px;
             transition: background 0.2s;
         }
-        .chat-item:hover, .chat-item.active { background: #334155; color: #fff; }
-        .chat-item-title {
+
+        .history-item:hover, .history-item.active {
+            background-color: #2b2c2d;
+            color: #ffffff;
+        }
+
+        .history-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .history-text {
+            flex: 1;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 180px;
         }
-        .delete-btn {
-            color: #64748b;
-            cursor: pointer;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-        .chat-item:hover .delete-btn { opacity: 1; }
-        .delete-btn:hover { color: #ef4444; }
-        
-        .user-profile {
-            padding: 15px;
-            border-top: 1px solid #334155;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 14px;
-        }
-        .logout-btn { color: #ef4444; text-decoration: none; font-size: 16px; }
 
-        /* Main Chat Area */
-        .main-chat { flex: 1; display: flex; flex-direction: column; height: 100vh; background: #0f172a; }
-        .chat-header {
-            height: 60px;
-            border-bottom: 1px solid #334155;
+        .delete-chat-btn {
+            background: none;
+            border: none;
+            color: #888888;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 50%;
+            font-size: 12px;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .delete-chat-btn:hover {
+            color: #ff6b6b;
+            background-color: rgba(255, 107, 107, 0.1);
+        }
+
+        .sidebar-footer {
+            padding: 16px;
+            padding-bottom: calc(16px + env(safe-area-inset-bottom));
+            border-top: 1px solid #2b2c2d;
+            font-size: 13px;
+            color: #aaaaaa;
+        }
+
+        .footer-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .footer-btn {
+            flex: 1;
             display: flex;
             align-items: center;
-            padding: 0 20px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #e2e8f0;
+            justify-content: center;
+            gap: 6px;
+            background-color: #2b2c2d;
+            color: #ffffff;
+            border: none;
+            padding: 8px 10px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
+            text-decoration: none;
         }
-        .messages-container {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
+
+        .footer-btn:hover {
+            background-color: #38393a;
+        }
+
+        .main-chat {
+            margin-left: 260px;
+            width: calc(100% - 260px);
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            height: 100vh;
+            background-color: #131314;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .message {
+
+        .main-chat.expanded {
+            margin-left: 0;
+            width: 100%;
+        }
+
+        .chat-header {
+            padding: 16px 24px;
+            font-size: 16px;
+            font-weight: 500;
+            color: #c4c7c5;
+            border-bottom: 1px solid #2b2c2d;
             display: flex;
-            gap: 15px;
-            max-width: 80%;
+            align-items: center;
+            gap: 12px;
         }
-        .message.user { align-self: flex-end; flex-direction: row-reverse; }
-        .message.bot { align-self: flex-start; }
-        .avatar {
-            width: 36px;
-            height: 36px;
+
+        .sidebar-toggle-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            flex-shrink: 0;
+            color: #e3e3e3;
+            font-size: 16px;
+            transition: background 0.2s;
         }
-        .user .avatar { background: #0284c7; color: #fff; }
-        .bot .avatar { background: #38bdf8; color: #0f172a; }
-        .content {
-            background: #1e293b;
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 15px;
-            line-height: 1.6;
-            word-break: break-word;
+        .sidebar-toggle-btn:hover {
+            background-color: #2b2c2d;
         }
-        .user .content { background: #0284c7; color: #fff; border-bottom-right-radius: 2px; }
-        .bot .content { background: #1e293b; border-bottom-left-radius: 2px; border: 1px solid #334155; }
-        .content p { margin-bottom: 8px; }
-        .content p:last-child { margin-bottom: 0; }
 
-        /* Input Area */
-        .input-area {
-            padding: 20px;
-            border-top: 1px solid #334155;
-            background: #0f172a;
-        }
-        .input-box {
-            display: flex;
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 8px 12px;
-            align-items: center;
-        }
-        .input-box input {
+        .chat-messages {
             flex: 1;
-            background: transparent;
-            border: none;
-            color: #fff;
-            padding: 8px;
-            font-size: 15px;
-            outline: none;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
         }
-        .send-btn {
-            background: #38bdf8;
-            border: none;
-            color: #0f172a;
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            cursor: pointer;
+
+        .message {
+            max-width: 80%;
+            line-height: 1.6;
+            font-size: 15px;
+            padding: 12px 18px;
+            border-radius: 16px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .message.user {
+            background-color: #2b2c2d;
+            align-self: flex-end;
+            color: #ffffff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.bot {
+            background-color: #1e1f20;
+            align-self: flex-start;
+            color: #e3e3e3;
+            border: 1px solid #2b2c2d;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-input-container {
+            padding: 20px 24px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom));
+            background-color: transparent;
+        }
+
+        .chat-input-box {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #1e1f20;
+            border-radius: 30px;
             display: flex;
             align-items: center;
-            justify-content: center;
-            transition: 0.2s;
+            padding: 8px 16px;
+            border: 1px solid #333333;
         }
-        .send-btn:hover { background: #0284c7; color: #fff; }
+
+        .chat-input-box textarea {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 15px;
+            resize: none;
+            outline: none;
+            max-height: 120px;
+            padding: 8px 0;
+        }
+
+        .send-btn {
+            background: none;
+            border: none;
+            color: #8ab4f8;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .send-btn:hover {
+            background-color: #2b2c2d;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.mobile-open {
+                transform: translateX(0);
+                box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+            }
+            .main-chat {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+        }
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <div class="brand">
-                <i class="fa-solid fa-robot"></i>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+            <div class="sidebar-logo-container">
+                <i class="fa-solid fa-brain"></i>
                 <span>AI KhangPhan</span>
             </div>
+            <button class="new-chat-btn" onclick="startNewChat()">
+                <i class="fa-solid fa-plus"></i> Cuộc trò chuyện mới
+            </button>
         </div>
-        <button class="new-chat-btn" onclick="createNewChat()">
-            <i class="fa-solid fa-plus"></i> Cuộc trò chuyện mới
-        </button>
-        <div class="chat-list" id="chatList"></div>
-        <div class="user-profile">
-            <span><i class="fa-solid fa-user-circle"></i> {{ session.get('user', 'Khách') }}</span>
-            <a href="/logout" class="logout-btn" title="Đăng xuất"><i class="fa-solid fa-right-from-bracket"></i></a>
+        
+        <div class="chat-history" id="chatHistory"></div>
+
+        <div class="sidebar-footer">
+            <div> Khang Phan WorkSpace </div>
+            <div class="footer-actions">
+                <button class="footer-btn" onclick="toggleTheme()">
+                    <i class="fa-solid fa-circle-half-stroke"></i> Giao diện
+                </button>
+                <a href="/logout" class="footer-btn">
+                    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Main Chat -->
-    <div class="main-chat">
-        <div class="chat-header" id="currentChatTitle">Cuộc trò chuyện mới</div>
-        <div class="messages-container" id="messagesContainer"></div>
-        <div class="input-area">
-            <div class="input-box">
-                <input type="text" id="userInput" placeholder="Gửi tin nhắn cho AI KhangPhan..." onkeydown="if(event.key === 'Enter') sendMessage()">
+    <div class="main-chat" id="mainChat">
+        <div class="chat-header">
+            <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
+                <i id="toggleIcon" class="fa-solid fa-bars"></i>
+            </button>
+            <span id="chatTitleHeader">AI KhangPhan</span>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <div class="chat-input-box">
+                <textarea id="userInput" placeholder="Hỏi AI Khang Phan..." rows="1" oninput="autoResize(this)" onkeydown="checkEnter(event)"></textarea>
                 <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
     </div>
 
     <script>
-        let sessions = {{ sessions | tojson }};
-        let currentChatId = Object.keys(sessions)[0] || 'chat_' + Date.now();
+        let chatSessions = {{ sessions | tojson | safe }};
+        let currentChatId = "";
 
-        if (!sessions[currentChatId]) {
-            sessions[currentChatId] = { title: "Cuộc trò chuyện mới", messages: [] };
+        const sessionKeys = Object.keys(chatSessions);
+        if (sessionKeys.length > 0) {
+            currentChatId = sessionKeys[0];
+            loadChatSession(currentChatId);
+        } else {
+            startNewChat(false);
         }
+        renderHistoryList();
 
-        function renderSidebar() {
-            const list = document.getElementById('chatList');
-            list.innerHTML = '';
-            for (let id in sessions) {
-                const item = document.createElement('div');
-                item.className = `chat-item ${id === currentChatId ? 'active' : ''}`;
-                item.onclick = () => switchChat(id);
-                item.innerHTML = `
-                    <div class="chat-item-title"><i class="fa-regular fa-message"></i> ${sessions[id].title}</div>
-                    <i class="fa-solid fa-trash delete-btn" onclick="event.stopPropagation(); deleteChat('${id}')"></i>
-                `;
-                list.appendChild(item);
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const mainChat = document.getElementById('mainChat');
+            const toggleIcon = document.getElementById('toggleIcon');
+
+            if (window.innerWidth <= 768) {
+                sidebar.classList.toggle('mobile-open');
+                toggleIcon.className = sidebar.classList.contains('mobile-open') ? "fa-solid fa-xmark" : "fa-solid fa-bars";
+            } else {
+                sidebar.classList.toggle('closed');
+                mainChat.classList.toggle('expanded');
+                toggleIcon.className = sidebar.classList.contains('closed') ? "fa-solid fa-arrow-right" : "fa-solid fa-bars";
             }
         }
 
-        function renderMessages() {
-            const container = document.getElementById('messagesContainer');
-            container.innerHTML = '';
-            const chat = sessions[currentChatId];
-            if (!chat) return;
-
-            document.getElementById('currentChatTitle').innerText = chat.title;
-
-            chat.messages.forEach(msg => {
-                const div = document.createElement('div');
-                div.className = `message ${msg.role}`;
-                const isUser = msg.role === 'user';
-                div.innerHTML = `
-                    <div class="avatar">${isUser ? 'U' : 'AI'}</div>
-                    <div class="content">${isUser ? msg.text : marked.parse(msg.text)}</div>
-                `;
-                container.appendChild(div);
-            });
-            container.scrollTop = container.scrollHeight;
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
         }
 
-        function switchChat(id) {
-            currentChatId = id;
-            renderSidebar();
-            renderMessages();
+        function checkEnter(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
         }
 
-        async function createNewChat() {
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+        }
+
+        async function startNewChat() {
             const newId = 'chat_' + Date.now();
-            const res = await fetch('/new_chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: newId })
-            });
-            const data = await res.json();
-            if (data.success) {
-                sessions = data.sessions;
-                currentChatId = newId;
-                renderSidebar();
-                renderMessages();
+            try {
+                const response = await fetch('/new_chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: newId })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    chatSessions = data.sessions;
+                    loadChatSession(newId);
+                }
+            } catch (e) {
+                console.error("Lỗi tạo chat mới:", e);
             }
         }
 
-        async function deleteChat(id) {
-            const res = await fetch('/delete_chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: id })
+        function renderHistoryList() {
+            const historyContainer = document.getElementById('chatHistory');
+            historyContainer.innerHTML = '';
+
+            for (let id in chatSessions) {
+                const item = document.createElement('div');
+                item.className = `history-item ${id === currentChatId ? 'active' : ''}`;
+                item.innerHTML = `
+                    <div class="history-content" onclick="loadChatSession('${id}')">
+                        <i class="fa-regular fa-message"></i>
+                        <span class="history-text">${chatSessions[id].title}</span>
+                    </div>
+                    <button class="delete-chat-btn" onclick="deleteChat(event, '${id}')" title="Xóa đoạn chat">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+                historyContainer.appendChild(item);
+            }
+        }
+
+        function loadChatSession(id) {
+            currentChatId = id;
+            if (!chatSessions[id]) return;
+
+            document.getElementById('chatTitleHeader').textContent = chatSessions[id].title;
+            
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+
+            chatSessions[id].messages.forEach(msg => {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = `message ${msg.role}`;
+                msgDiv.textContent = msg.text;
+                chatMessages.appendChild(msgDiv);
             });
-            const data = await res.json();
-            if (data.success) {
-                sessions = data.sessions;
-                currentChatId = Object.keys(sessions)[0] || 'chat_' + Date.now();
-                if (!sessions[currentChatId]) {
-                    sessions[currentChatId] = { title: "Cuộc trò chuyện mới", messages: [] };
+
+            renderHistoryList();
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function deleteChat(event, id) {
+            event.stopPropagation();
+            if (!confirm("Bạn có chắc chắn muốn xóa đoạn chat này không?")) return;
+
+            try {
+                const response = await fetch('/delete_chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: id })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    chatSessions = data.sessions;
+                    const keys = Object.keys(chatSessions);
+                    if (keys.length > 0) {
+                        loadChatSession(keys[0]);
+                    } else {
+                        startNewChat();
+                    }
                 }
-                renderSidebar();
-                renderMessages();
+            } catch (e) {
+                console.error("Lỗi xóa chat:", e);
             }
         }
 
         async function sendMessage() {
             const input = document.getElementById('userInput');
-            const text = input.value.trim();
-            if (!text) return;
+            const messageText = input.value.trim();
+            if (!messageText) return;
+
+            const chatMessages = document.getElementById('chatMessages');
+            
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.textContent = messageText;
+            chatMessages.appendChild(userMsg);
+            chatSessions[currentChatId].messages.push({ role: 'user', text: messageText });
 
             input.value = '';
+            input.style.height = 'auto';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            // Add to UI immediately
-            sessions[currentChatId].messages.push({ role: 'user', text: text });
-            renderMessages();
+            const botMsg = document.createElement('div');
+            botMsg.className = 'message bot';
+            botMsg.textContent = "Đang suy nghĩ...⟳";
+            chatMessages.appendChild(botMsg);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            try {
-                const res = await fetch('/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: currentChatId, message: text })
-                });
-                const data = await res.json();
-                if (data.response) {
-                    sessions = data.sessions;
-                    renderSidebar();
-                    renderMessages();
+            let retries = 3;
+            let success = false;
+            let finalBotResponse = "";
+
+            while (retries > 0 && !success) {
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: messageText, chat_id: currentChatId })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok && data.response) {
+                        finalBotResponse = data.response;
+                        botMsg.textContent = finalBotResponse;
+                        success = true;
+                        chatSessions = data.sessions;
+                        document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
+                        renderHistoryList();
+                    } else {
+                        throw new Error(data.error || "Server quá tải");
+                    }
+                } catch (error) {
+                    retries--;
+                    if (retries === 0) {
+                        finalBotResponse = "Hệ thống đang quá tải tạm thời (Lỗi 503). Vui lòng thử lại sau ít phút!";
+                        botMsg.textContent = finalBotResponse;
+                    } else {
+                        botMsg.textContent = `Đang thử kết nối lại lần thứ ${4 - retries}...`;
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
                 }
-            } catch (err) {
-                console.error(err);
             }
-        }
 
-        // Khởi chạy ban đầu
-        renderSidebar();
-        renderMessages();
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
     </script>
 </body>
 </html>
 """
 
-# ==============================================================================
-# HÀM XỬ LÝ LƯU TRỮ DỮ LIỆU & SESSION KHÁCH HÀNG
-# ==============================================================================
+# ==================== ROUTE XỬ LÝ FLASK ====================
+
+from flask import Flask, render_template, request, jsonify, session
+import os
+import json
+from google import genai
+import traceback
+
+app = Flask(__name__)
+app.secret_key = "secret_key"
+
+# Khởi tạo client Gemini API
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY")) client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+DB_FILE = "database.json"
+
 def load_db():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            return {"users": {}, "sessions": {}}
-    return {"users": {}, "sessions": {}}
-
-db_data = load_db()
-if "users" not in db_data:
-    db_data["users"] = {}
-if "sessions" not in db_data:
-    db_data["sessions"] = {}
-
-users_db = db_data["users"]
-user_sessions_global = db_data["sessions"]
-user_histories = {}
+            return {}
+    return {}
 
 def save_db():
     with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump({"users": users_db, "sessions": user_sessions_global}, f, ensure_ascii=False, indent=4)
+        json.dump(user_sessions, f, ensure_ascii=False, indent=4)
 
-def get_current_user_sessions():
-    user = session.get('user', 'guest')
-    if user not in user_sessions_global:
-        user_sessions_global[user] = {}
-    return user_sessions_global[user]
+user_sessions = load_db()
+user_histories = {}
 
-def get_current_user_histories():
-    user = session.get('user', 'guest')
-    if user not in user_histories:
-        user_histories[user] = {}
-    return user_histories[user]
+for chat_id, data in user_sessions.items():
+    user_histories[chat_id] = []
+    for msg in data.get("messages", []):
+        role = "user" if msg["role"] == "user" else "model"
+        user_histories[chat_id].append({
+            "role": role,
+            "parts": [{"text": msg["text"]}]
+        })
 
-# Khôi phục lịch sử chat Gemini khi khởi động ứng dụng
-for user, user_chats in user_sessions_global.items():
-    user_histories[user] = {}
-    for chat_id, data in user_chats.items():
-        user_histories[user][chat_id] = []
-        for msg in data.get("messages", []):
-            role = "user" if msg["role"] == "user" else "model"
-            user_histories[user][chat_id].append({
-                "role": role,
-                "parts": [{"text": msg["text"]}]
-            })
-
-# ==============================================================================
-# ROUTE ĐIỀU HƯỚNG VÀ API BACKEND
-# ==============================================================================
 @app.route('/')
 def index():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    
-    user_sessions = get_current_user_sessions()
-    if not user_sessions:
-        default_id = 'chat_' + str(int(os.urandom(4).hex(), 16))
-        user_sessions[default_id] = {
-            'title': 'Cuộc trò chuyện mới',
-            'messages': []
-        }
-        save_db()
-        
-    return render_template_string(CHAT_HTML_TEMPLATE, sessions=user_sessions)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'GET':
-        return render_template_string(LOGIN_HTML_TEMPLATE)
-    
-    data = request.get_json() or {}
-    username = data.get('username')
-    password = data.get('password')
-    
-    if not username or not password:
-        return jsonify({'success': False, 'error': 'Vui lòng nhập đầy đủ thông tin!'}), 400
-        
-    if username in users_db and users_db[username] == password:
-        session['user'] = username
-        return jsonify({'success': True, 'redirect': '/'})
-    
-    return jsonify({'success': False, 'error': 'Tài khoản hoặc mật khẩu không chính xác!'}), 401
-
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json() or {}
-    username = data.get('username')
-    password = data.get('password')
-    
-    if not username or not password:
-        return jsonify({'success': False, 'error': 'Vui lòng nhập đầy đủ thông tin!'}), 400
-        
-    if username in users_db:
-        return jsonify({'success': False, 'error': 'Tài khoản này đã tồn tại!'}), 400
-        
-    users_db[username] = password
-    save_db()
-    
-    session['user'] = username
-    return jsonify({'success': True, 'redirect': '/'})
-
-@app.route('/logout')
-def logout():
-    session.pop('user', None)
-    return redirect(url_for('login'))
-
-@app.route('/new_chat', methods=['POST'])
-def new_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-        
-    data = request.get_json() or {}
-    chat_id = data.get('chat_id')
-    user_sessions = get_current_user_sessions()
-    
-    if chat_id:
-        user_sessions[chat_id] = {
-            'title': 'Cuộc trò chuyện mới',
-            'messages': []
-        }
-        save_db()
-        
-    return jsonify({'success': True, 'sessions': user_sessions})
-
-@app.route('/delete_chat', methods=['POST'])
-def delete_chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-        
-    data = request.get_json() or {}
-    chat_id = data.get('chat_id')
-    user_sessions = get_current_user_sessions()
-    
-    if chat_id in user_sessions:
-        del user_sessions[chat_id]
-        save_db()
-        
-    return jsonify({'success': True, 'sessions': user_sessions})
+    return render_template('index.html', sessions=user_sessions)
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    if 'user' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-
     try:
-        data = request.get_json() or {}
+        data = request.json
         chat_id = data.get("chat_id")
         user_message = data.get("message")
 
         if not chat_id or not user_message:
             return jsonify({"error": "Thiếu thông tin chat_id hoặc message"}), 400
 
-        user_sessions = get_current_user_sessions()
-        user_histories_dict = get_current_user_histories()
-
         if chat_id not in user_sessions:
             user_sessions[chat_id] = {
                 "title": "Cuộc trò chuyện mới",
                 "messages": []
             }
+            user_histories[chat_id] = []
 
-        if chat_id not in user_histories_dict:
-            user_histories_dict[chat_id] = []
+        if chat_id not in user_histories:
+            user_histories[chat_id] = []
 
-        # Tự động tạo tiêu đề với gemini-3.5-flash-lite nếu là cuộc trò chuyện mới
+       # Tự động tạo tiêu đề nếu là cuộc trò chuyện mới
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_response = client.models.generate_content(
@@ -816,9 +962,566 @@ def chat():
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
-        # Tạo Chat Session với Gemini SDK dùng model gemini-3.5-flash-lite
         chat_session = client.chats.create(
             model='gemini-3.5-flash-lite',
+            config={
+                'system_instruction': (
+                    "Bạn là trợ lý ảo AI KhangPhan. "
+                   import os
+import json
+import traceback
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
+from google import genai
+from authlib.integrations.flask_client import OAuth
+import khangphan_memory
+
+app = Flask(__name__)
+app.secret_key = '07062014'  # Khóa bảo mật cho session
+
+# Khởi tạo client Gemini API từ biến môi trường
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+# Cấu hình OAuth cho Google lấy từ biến môi trường
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
+
+# Tải bộ nhớ dữ liệu toàn cục qua khangphan_memory
+db = khangphan_memory.load_memory_data()
+users_db = db.setdefault("users", {})         
+all_chat_sessions = db.setdefault("sessions", {})  
+all_server_histories = db.setdefault("histories", {}) 
+
+def get_current_user_sessions():
+    user = session.get('user')
+    if not user:
+        return {}
+    if user not in all_chat_sessions:
+        all_chat_sessions[user] = {}
+    return all_chat_sessions[user]
+
+def get_current_user_histories():
+    user = session.get('user')
+    if not user:
+        return {}
+    if user not in all_server_histories:
+        all_server_histories[user] = {}
+    return all_server_histories[user]
+
+def save_db():
+    khangphan_memory.save_memory_data({
+        "sessions": all_chat_sessions,
+        "histories": all_server_histories,
+        "users": users_db
+    })
+
+# ==================== HTML TEMPLATES ====================
+
+LOGIN_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI KHANG PHAN - Đăng Nhập</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #0f172a; 
+            color: white; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+        }
+        .card { 
+            background: #1e293b; 
+            padding: 30px; 
+            border-radius: 12px; 
+            width: 340px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+            text-align: center; 
+        }
+        h2 { margin-bottom: 20px; color: #f8fafc; }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            border-radius: 6px; 
+            border: 1px solid #334155; 
+            background: #0f172a; 
+            color: white; 
+            box-sizing: border-box; 
+            outline: none;
+        }
+        input:focus { border-color: #38bdf8; }
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            margin-top: 10px; 
+            border-radius: 6px; 
+            border: none; 
+            background: #2563eb; 
+            color: white; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: 0.2s;
+        }
+        button:hover { background: #1d4ed8; }
+        .google-btn {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-weight: 600;
+            text-decoration: none;
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 6px;
+        }
+        .google-btn:hover { background-color: #e2e8f0; }
+        .divider {
+            margin: 15px 0;
+            border-bottom: 1px solid #334155;
+            position: relative;
+        }
+        .divider span {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            padding: 0 10px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .toggle { margin-top: 20px; font-size: 14px; color: #94a3b8; cursor: pointer; }
+        .toggle span { color: #38bdf8; text-decoration: underline; }
+        .error { color: #f87171; font-size: 14px; margin-top: 12px; min-height: 18px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2 id="form-title">Đăng Nhập AI</h2>
+    <input type="text" id="email" placeholder="Email / Tên đăng nhập" autocomplete="off">
+    <input type="password" id="password" placeholder="Mật khẩu" onkeypress="handleKeyPress(event)">
+    
+    <button id="submit-btn" onclick="handleSubmit()">Đăng Nhập</button>
+    
+    <div class="divider"><span>HOẶC</span></div>
+
+    <a href="/login/google" class="google-btn">
+        <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Đăng nhập với Google
+    </a>
+
+    <div class="error" id="error-msg"></div>
+
+    <div class="toggle" onclick="toggleForm()">
+        <span id="toggle-text">Chưa có tài khoản? Đăng ký ngay</span>
+    </div>
+</div>
+
+<script>
+    let isRegister = false;
+
+    function toggleForm() {
+        isRegister = !isRegister;
+        document.getElementById('form-title').innerText = isRegister ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập AI';
+        document.getElementById('submit-btn').innerText = isRegister ? 'Đăng Ký' : 'Đăng Nhập';
+        document.getElementById('toggle-text').innerText = isRegister ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký ngay';
+        document.getElementById('error-msg').innerText = '';
+    }
+
+    function handleKeyPress(e) {
+        if (e.key === 'Enter') {
+            handleSubmit();
+        }
+    }
+
+    async function handleSubmit() {
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const errorMsg = document.getElementById('error-msg');
+        
+        if (!email || !password) {
+            errorMsg.innerText = 'Vui lòng nhập đầy đủ thông tin!';
+            return;
+        }
+
+        errorMsg.innerText = 'Đang xử lý...';
+        const endpoint = isRegister ? '/register' : '/login';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                window.location.href = data.redirect || '/';
+            } else {
+                errorMsg.innerText = data.error || 'Có lỗi xảy ra!';
+            }
+        } catch (err) {
+            errorMsg.innerText = 'Lỗi kết nối máy chủ!';
+        }
+    }
+</script>
+
+</body>
+</html>
+"""
+
+CHAT_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI KhangPhan - Trợ lý ảo thông minh</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: #131314; color: #e3e3e3; display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 260px; background-color: #1e1f20; border-right: 1px solid #2b2c2d; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; }
+        .sidebar.closed { transform: translateX(-100%); }
+        .sidebar-top { padding: 16px; }
+        .sidebar-logo-container { display: flex; align-items: center; gap: 10px; padding: 8px 4px; margin-bottom: 20px; }
+        .sidebar-logo-container i { font-size: 20px; color: #8ab4f8; }
+        .sidebar-logo-container span { color: #ffffff; font-weight: 600; font-size: 15px; }
+        .new-chat-btn { display: flex; align-items: center; gap: 10px; background-color: #2b2c2d; color: #ffffff; border: none; padding: 12px 16px; border-radius: 30px; width: 100%; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .new-chat-btn:hover { background-color: #38393a; }
+        .chat-history { padding: 0 16px; overflow-y: auto; flex: 1; }
+        .history-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 20px; font-size: 14px; color: #cccccc; cursor: pointer; margin-top: 5px; }
+        .history-item:hover, .history-item.active { background-color: #2b2c2d; color: #ffffff; }
+        .history-content { display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; }
+        .history-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .delete-chat-btn { background: none; border: none; color: #888888; cursor: pointer; padding: 4px 6px; border-radius: 50%; font-size: 12px; }
+        .delete-chat-btn:hover { color: #ff6b6b; background-color: rgba(255, 107, 107, 0.1); }
+        .sidebar-footer { padding: 16px; border-top: 1px solid #2b2c2d; font-size: 13px; color: #aaaaaa; }
+        .footer-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .footer-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: #2b2c2d; color: #ffffff; border: none; padding: 8px 10px; border-radius: 16px; cursor: pointer; font-size: 13px; text-decoration: none; }
+        .main-chat { margin-left: 260px; width: calc(100% - 260px); display: flex; flex-direction: column; height: 100vh; background-color: #131314; }
+        .main-chat.expanded { margin-left: 0; width: 100%; }
+        .chat-header { padding: 16px 24px; font-size: 16px; font-weight: 500; color: #c4c7c5; border-bottom: 1px solid #2b2c2d; display: flex; align-items: center; gap: 12px; }
+        .sidebar-toggle-btn { background: none; border: none; cursor: pointer; padding: 8px; border-radius: 50%; color: #e3e3e3; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%; margin: 0 auto; }
+        .message { max-width: 80%; line-height: 1.6; font-size: 15px; padding: 12px 18px; border-radius: 16px; word-wrap: break-word; white-space: pre-wrap; }
+        .message.user { background-color: #2b2c2d; align-self: flex-end; color: #ffffff; border-bottom-right-radius: 4px; }
+        .message.bot { background-color: #1e1f20; align-self: flex-start; color: #e3e3e3; border: 1px solid #2b2c2d; border-bottom-left-radius: 4px; }
+        .chat-input-container { padding: 20px 24px; }
+        .chat-input-box { max-width: 900px; margin: 0 auto; background-color: #1e1f20; border-radius: 30px; display: flex; align-items: center; padding: 8px 16px; border: 1px solid #333333; }
+        .chat-input-box textarea { flex: 1; background: none; border: none; color: #ffffff; font-size: 15px; resize: none; outline: none; max-height: 120px; padding: 8px 0; }
+        .send-btn { background: none; border: none; color: #8ab4f8; font-size: 18px; cursor: pointer; padding: 8px; border-radius: 50%; }
+    </style>
+</head>
+<body>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+            <div class="sidebar-logo-container">
+                <i class="fa-solid fa-brain"></i>
+                <span>AI KhangPhan</span>
+            </div>
+            <button class="new-chat-btn" onclick="startNewChat()">
+                <i class="fa-solid fa-plus"></i> Cuộc trò chuyện mới
+            </button>
+        </div>
+        <div class="chat-history" id="chatHistory"></div>
+        <div class="sidebar-footer">
+            <div>Khang Phan WorkSpace</div>
+            <div class="footer-actions">
+                <a href="/logout" class="footer-btn"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-chat" id="mainChat">
+        <div class="chat-header">
+            <button class="sidebar-toggle-btn" onclick="toggleSidebar()"><i id="toggleIcon" class="fa-solid fa-bars"></i></button>
+            <span id="chatTitleHeader">AI KhangPhan</span>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
+        </div>
+        <div class="chat-input-container">
+            <div class="chat-input-box">
+                <textarea id="userInput" placeholder="Hỏi AI Khang Phan..." rows="1" onkeydown="checkEnter(event)"></textarea>
+                <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chatSessions = {{ sessions | tojson | safe }};
+        let currentChatId = "";
+
+        const sessionKeys = Object.keys(chatSessions);
+        if (sessionKeys.length > 0) {
+            currentChatId = sessionKeys[0];
+            loadChatSession(currentChatId);
+        } else {
+            startNewChat(false);
+        }
+        renderHistoryList();
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const mainChat = document.getElementById('mainChat');
+            sidebar.classList.toggle('closed');
+            mainChat.classList.toggle('expanded');
+        }
+
+        function checkEnter(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        async function startNewChat() {
+            const newId = 'chat_' + Date.now();
+            try {
+                const response = await fetch('/new_chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: newId })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    chatSessions = data.sessions;
+                    loadChatSession(newId);
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        function renderHistoryList() {
+            const historyContainer = document.getElementById('chatHistory');
+            historyContainer.innerHTML = '';
+            for (let id in chatSessions) {
+                const item = document.createElement('div');
+                item.className = `history-item ${id === currentChatId ? 'active' : ''}`;
+                item.innerHTML = `
+                    <div class="history-content" onclick="loadChatSession('${id}')">
+                        <i class="fa-regular fa-message"></i>
+                        <span class="history-text">${chatSessions[id].title}</span>
+                    </div>
+                    <button class="delete-chat-btn" onclick="deleteChat(event, '${id}')"><i class="fa-solid fa-trash-can"></i></button>
+                `;
+                historyContainer.appendChild(item);
+            }
+        }
+
+        function loadChatSession(id) {
+            currentChatId = id;
+            if (!chatSessions[id]) return;
+            document.getElementById('chatTitleHeader').textContent = chatSessions[id].title;
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+            chatSessions[id].messages.forEach(msg => {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = `message ${msg.role === 'user' ? 'user' : 'bot'}`;
+                msgDiv.textContent = msg.text;
+                chatMessages.appendChild(msgDiv);
+            });
+            renderHistoryList();
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function deleteChat(event, id) {
+            event.stopPropagation();
+            if (!confirm("Bạn có chắc muốn xóa đoạn chat này?")) return;
+            const response = await fetch('/delete_chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: id })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                chatSessions = data.sessions;
+                const keys = Object.keys(chatSessions);
+                if (keys.length > 0) loadChatSession(keys[0]);
+                else startNewChat();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const messageText = input.value.trim();
+            if (!messageText) return;
+
+            const chatMessages = document.getElementById('chatMessages');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.textContent = messageText;
+            chatMessages.appendChild(userMsg);
+            chatSessions[currentChatId].messages.push({ role: 'user', text: messageText });
+
+            input.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            const botMsg = document.createElement('div');
+            botMsg.className = 'message bot';
+            botMsg.textContent = "Đang suy nghĩ...⟳";
+            chatMessages.appendChild(botMsg);
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: messageText, chat_id: currentChatId })
+                });
+                const data = await response.json();
+                if (response.ok && data.response) {
+                    botMsg.textContent = data.response;
+                    chatSessions = data.sessions;
+                    document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
+                    renderHistoryList();
+                } else {
+                    botMsg.textContent = data.error || "Lỗi hệ thống!";
+                }
+            } catch (e) {
+                botMsg.textContent = "Lỗi kết nối máy chủ!";
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+"""
+
+# ==================== FLASK ROUTES ====================
+
+@app.route('/')
+def index():
+    if 'user' not in session:
+        return render_template_string(LOGIN_HTML_TEMPLATE)
+    user_sessions = get_current_user_sessions()
+    return render_template_string(CHAT_HTML_TEMPLATE, sessions=user_sessions)
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    if not email or not password:
+        return jsonify({"success": False, "error": "Vui lòng điền đủ thông tin!"}), 400
+    if email in users_db and users_db[email] == password:
+        session['user'] = email
+        return jsonify({"success": True, "redirect": "/"})
+    return jsonify({"success": False, "error": "Email hoặc mật khẩu không đúng!"}), 401
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    if not email or not password:
+        return jsonify({"success": False, "error": "Vui lòng điền đủ thông tin!"}), 400
+    if email in users_db:
+        return jsonify({"success": False, "error": "Tài khoản đã tồn tại!"}), 400
+    users_db[email] = password
+    save_db()
+    session['user'] = email
+    return jsonify({"success": True, "redirect": "/"})
+
+@app.route('/login/google')
+def google_login():
+    redirect_uri = url_for('google_authorize', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/login/google/authorize')
+def google_authorize():
+    token = google.authorize_access_token()
+    resp = google.get('https://www.googleapis.com/oauth2/v1/userinfo')
+    user_info = resp.json()
+    email = user_info.get('email')
+    if email:
+        if email not in users_db:
+            users_db[email] = "GOOGLE_OAUTH_USER"
+            save_db()
+        session['user'] = email
+        return redirect(url_for('index'))
+    return redirect(url_for('/'))
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+@app.route('/new_chat', methods=['POST'])
+def new_chat():
+    user_sessions = get_current_user_sessions()
+    data = request.json
+    chat_id = data.get('chat_id')
+    if chat_id:
+        user_sessions[chat_id] = {
+            "title": "Cuộc trò chuyện mới",
+            "messages": []
+        }
+        save_db()
+    return jsonify({"success": True, "sessions": user_sessions})
+
+@app.route('/delete_chat', methods=['POST'])
+def delete_chat():
+    user_sessions = get_current_user_sessions()
+    data = request.json
+    chat_id = data.get('chat_id')
+    if chat_id in user_sessions:
+        del user_sessions[chat_id]
+        save_db()
+    return jsonify({"success": True, "sessions": user_sessions})
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        user = session.get('user')
+        if not user:
+            return jsonify({"error": "Chưa đăng nhập"}), 401
+
+        data = request.json
+        chat_id = data.get("chat_id")
+        user_message = data.get("message")
+
+        if not chat_id or not user_message:
+            return jsonify({"error": "Thiếu thông tin chat_id hoặc message"}), 400
+
+        user_sessions = get_current_user_sessions()
+        if chat_id not in user_sessions:
+            user_sessions[chat_id] = {
+                "title": "Cuộc trò chuyện mới",
+                "messages": []
+            }
+
+        # Tạo tiêu đề tự động nếu là chat mới
+        if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
+            try:
+                title_response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=f"Đặt một tiêu đề ngắn gọn dưới 5 từ cho nội dung: '{user_message}'"
+                )
+                new_title = title_response.text.strip().replace('"', '')
+                if new_title:
+                    user_sessions[chat_id]["title"] = new_title
+            except Exception as e:
+                print(f"Lỗi tạo tiêu đề: {e}")
+
+        # Gọi Gemini AI phản hồi kèm theo System Instruction cố định
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=user_message,
             config={
                 'system_instruction': (
                     "Bạn là trợ lý ảo AI KhangPhan. "
@@ -828,26 +1531,13 @@ def chat():
                     "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
                     "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
                 )
-            },
-            history=user_histories_dict[chat_id]
+            }
         )
-        response = chat_session.send_message(user_message)
+        
         bot_response = response.text
 
-        # Cập nhật lịch sử chat cho model Gemini
-        user_histories_dict[chat_id].append({
-            "role": "user",
-            "parts": [{"text": user_message}]
-        })
-        user_histories_dict[chat_id].append({
-            "role": "model",
-            "parts": [{"text": bot_response}]
-        })
-
-        # Lưu lịch sử hiển thị
         user_sessions[chat_id]["messages"].append({"role": "user", "text": user_message})
         user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
-
         save_db()
 
         return jsonify({
@@ -861,44 +1551,11 @@ def chat():
 
 @app.route('/privacy')
 def privacy_policy():
-    return render_template_string("""
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Chính sách bảo mật - AI KhangPhan</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; background: #0f172a; color: #f8fafc; }
-        h1 { color: #38bdf8; }
-    </style>
-</head>
-<body>
-    <h1>Chính sách bảo mật</h1>
-    <p>AI KhangPhan cam kết bảo vệ thông tin người dùng và không chia sẻ dữ liệu cá nhân ra bên ngoài.</p>
-</body>
-</html>
-""")
+    return "<h1>Chính sách bảo mật AI KhangPhan</h1>"
 
 @app.route('/terms')
 def terms_of_service():
-    return render_template_string("""
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Điều khoản dịch vụ - AI KhangPhan</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; background: #0f172a; color: #f8fafc; }
-        h1 { color: #38bdf8; }
-    </style>
-</head>
-<body>
-    <h1>Điều khoản dịch vụ</h1>
-    <p>Khi sử dụng ứng dụng AI KhangPhan, bạn đồng ý tuân thủ các quy định và điều kiện sử dụng dịch vụ của chúng tôi.</p>
-    <p>Ứng dụng được xây dựng phục vụ nhu cầu trải nghiệm cá nhân và học tập.</p>
-</body>
-</html>
-""")
+    return "<h1>Điều khoản dịch vụ AI KhangPhan</h1>"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
