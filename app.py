@@ -26,7 +26,7 @@ google = oauth.register(
 
 # Tải bộ nhớ dữ liệu toàn cục qua khangphan_memory
 db = khangphan_memory.load_memory_data()
-users_db = db.setdefault("users", {})         
+users_db = db.setdefault("users", {})          
 all_chat_sessions = db.setdefault("sessions", {})  
 all_server_histories = db.setdefault("histories", {}) 
 
@@ -226,6 +226,8 @@ CHAT_HTML_TEMPLATE = """
     <title>AI KhangPhan - Trợ lý ảo thông minh</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Thêm thư viện Marked.js để định dạng Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { background-color: #131314; color: #e3e3e3; display: flex; height: 100vh; overflow: hidden; }
@@ -252,9 +254,11 @@ CHAT_HTML_TEMPLATE = """
         .chat-header { padding: 16px 24px; font-size: 16px; font-weight: 500; color: #c4c7c5; border-bottom: 1px solid #2b2c2d; display: flex; align-items: center; gap: 12px; }
         .sidebar-toggle-btn { background: none; border: none; cursor: pointer; padding: 8px; border-radius: 50%; color: #e3e3e3; }
         .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%; margin: 0 auto; }
-        .message { max-width: 80%; line-height: 1.6; font-size: 15px; padding: 12px 18px; border-radius: 16px; word-wrap: break-word; white-space: pre-wrap; }
+        .message { max-width: 80%; line-height: 1.6; font-size: 15px; padding: 12px 18px; border-radius: 16px; word-wrap: break-word; }
         .message.user { background-color: #2b2c2d; align-self: flex-end; color: #ffffff; border-bottom-right-radius: 4px; }
         .message.bot { background-color: #1e1f20; align-self: flex-start; color: #e3e3e3; border: 1px solid #2b2c2d; border-bottom-left-radius: 4px; }
+        .message.bot p { margin-bottom: 8px; }
+        .message.bot p:last-child { margin-bottom: 0; }
         .chat-input-container { padding: 20px 24px; }
         .chat-input-box { max-width: 900px; margin: 0 auto; background-color: #1e1f20; border-radius: 30px; display: flex; align-items: center; padding: 8px 16px; border: 1px solid #333333; }
         .chat-input-box textarea { flex: 1; background: none; border: none; color: #ffffff; font-size: 15px; resize: none; outline: none; max-height: 120px; padding: 8px 0; }
@@ -403,14 +407,21 @@ CHAT_HTML_TEMPLATE = """
             chatSessions[id].messages.forEach(msg => {
                 const msgDiv = document.createElement('div');
                 msgDiv.className = `message ${msg.role === 'user' ? 'user' : 'bot'}`;
+                
+                let htmlContent = '';
                 if (msg.image) {
-                    msgDiv.innerHTML = `<img src="${msg.image}" style="max-width: 200px; display: block; margin-bottom: 8px; border-radius: 8px;">`;
+                    htmlContent += `<img src="${msg.image}" style="max-width: 200px; display: block; margin-bottom: 8px; border-radius: 8px;">`;
                 }
                 if (msg.text) {
-                    const textSpan = document.createElement('span');
-                    textSpan.textContent = msg.text;
-                    msgDiv.appendChild(textSpan);
+                    if (msg.role === 'bot') {
+                        htmlContent += marked.parse(msg.text);
+                    } else {
+                        const textSpan = document.createElement('span');
+                        textSpan.textContent = msg.text;
+                        htmlContent += textSpan.outerHTML;
+                    }
                 }
+                msgDiv.innerHTML = htmlContent;
                 chatMessages.appendChild(msgDiv);
             });
             renderHistoryList();
@@ -473,7 +484,7 @@ CHAT_HTML_TEMPLATE = """
                 });
                 const data = await response.json();
                 if (response.ok && data.response) {
-                    botMsg.textContent = data.response;
+                    botMsg.innerHTML = marked.parse(data.response);
                     chatSessions = data.sessions;
                     document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
                     renderHistoryList();
@@ -643,7 +654,7 @@ def chat():
         
         bot_response = response.text
 
-        # Lưu lại tin nhắn vào session (có lưu kèm ảnh nếu có để load lại lịch sử hiển thị đúng)
+        # Lưu lại tin nhắn vào session
         user_msg_obj = {"role": "user", "text": user_message if user_message else ""}
         if image_data:
             user_msg_obj["image"] = image_data
