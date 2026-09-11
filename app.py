@@ -628,7 +628,7 @@ def chat():
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
                 title_response = client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-3.5-flash-lite',
                     contents=f"Đặt một tiêu đề ngắn gọn dưới 5 từ cho nội dung: '{title_prompt}'"
                 )
                 new_title = title_response.text.strip().replace('"', '')
@@ -638,7 +638,7 @@ def chat():
                 print(f"Lỗi tạo tiêu đề: {e}")
 
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.5-flash-lite',
             contents=gemini_contents,
             config={
                 'system_instruction': (
