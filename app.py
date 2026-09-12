@@ -513,7 +513,7 @@ def index():
 
 @app.route("/login", methods=["POST"])
 def login():
-    data = request.json
+    data = request.json or {}
     email = data.get("email")
     password = data.get("password")
     if not email or not password:
@@ -526,7 +526,7 @@ def login():
 
 @app.route("/register", methods=["POST"])
 def register():
-    data = request.json
+    data = request.json or {}
     email = data.get("email")
     password = data.get("password")
     if not email or not password:
@@ -569,7 +569,7 @@ def logout():
 @app.route("/new_chat", methods=["POST"])
 def new_chat():
     user_sessions = get_current_user_sessions()
-    data = request.json
+    data = request.json or {}
     chat_id = data.get("chat_id")
     if chat_id:
         user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
@@ -580,7 +580,7 @@ def new_chat():
 @app.route("/delete_chat", methods=["POST"])
 def delete_chat_route():
     user_sessions = get_current_user_sessions()
-    data = request.json
+    data = request.json or {}
     chat_id = data.get("chat_id")
     if chat_id in user_sessions:
         del user_sessions[chat_id]
@@ -595,7 +595,7 @@ def chat():
         if not user:
             return jsonify({"error": "Chưa đăng nhập"}), 401
 
-        data = request.json
+        data = request.json or {}
         chat_id = data.get("chat_id")
         user_message = data.get("message")
         image_data = data.get("image")
@@ -620,12 +620,12 @@ def chat():
         else:
             gemini_contents.append("Hãy mô tả hoặc phân tích bức ảnh này giúp tôi.")
 
-        # Tạo tiêu đề tự động nếu là chat mới (dùng model 'gemini-3.5-flash-lite' chuẩn)
+        # Tạo tiêu đề tự động nếu là chat mới (Sử dụng model chuẩn gemini-3.5-flash)
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
                 title_response = client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-3.5-flash",
                     contents=f"Đặt một tiêu đề ngắn gọn dưới 5 từ cho nội dung: '{title_prompt}'",
                 )
                 new_title = title_response.text.strip().replace('"', "")
@@ -634,9 +634,9 @@ def chat():
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
-        # Gọi model Gemini chính với cấu hình chuẩn
+        # Gọi model Gemini chính (Sử dụng model chuẩn gemini-3.5-flash)
         response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
+            model="gemini-3.5-flash",
             contents=gemini_contents,
             config={
                 "system_instruction": (
