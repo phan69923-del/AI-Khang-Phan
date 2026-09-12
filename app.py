@@ -473,8 +473,13 @@ CHAT_HTML_TEMPLATE = """
 
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
-            botMsg.textContent = "Đang suy nghĩ...⟳";
+            botMsg.innerHTML = "Đang suy nghĩ... 💭";
             chatMessages.appendChild(botMsg);
+
+            // Hiệu ứng trạng thái đang tra cứu nếu câu hỏi cần tìm kiếm thông tin thời sự/web
+            if (payloadText && (payloadText.toLowerCase().includes('bão') || payloadText.toLowerCase().includes('mới nhất') || payloadText.toLowerCase().includes('hôm nay') || payloadText.toLowerCase().includes('là ai') || payloadText.toLowerCase().includes('thời tiết'))) {
+                botMsg.innerHTML = `🔍 Đang tìm thông tin về: <i>"${payloadText}"</i>...`;
+            }
 
             try {
                 const response = await fetch('/chat', {
@@ -483,8 +488,15 @@ CHAT_HTML_TEMPLATE = """
                     body: JSON.stringify({ message: payloadText, chat_id: currentChatId, image: payloadImage })
                 });
                 const data = await response.json();
+                
                 if (response.ok && data.response) {
-                    botMsg.innerHTML = marked.parse(data.response);
+                    let finalOutput = "";
+                    if (data.searched && data.queries && data.queries.length > 0) {
+                        finalOutput += `<div style="font-size: 12px; color: #8ab4f8; margin-bottom: 6px; border-left: 2px solid #8ab4f8; padding-left: 6px;">🌐 Đã tìm kiếm: ${data.queries.join(', ')}</div>`;
+                    }
+                    finalOutput += marked.parse(data.response);
+                    
+                    botMsg.innerHTML = finalOutput;
                     chatSessions = data.sessions;
                     document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
                     renderHistoryList();
@@ -620,37 +632,56 @@ def chat():
         else:
             gemini_contents.append("Hãy mô tả hoặc phân tích bức ảnh này giúp tôi.")
 
-        # Tạo tiêu đề tự động nếu là chat mới (Sử dụng model chuẩn gemini-3.5-flash)
+        # Tạo tiêu đề tự động (Ép model chỉ trả về đúng tiêu đề ngắn gọn dưới 5 từ, cấm giải thích)
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
                 title_response = client.models.generate_content(
                     model="gemini-3.5-flash",
-                    contents=f"Đặt một tiêu đề ngắn gọn dưới 5 từ cho nội dung: '{title_prompt}'",
+                    contents=(
+                        f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
+                        "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
+                    ),
                 )
-                new_title = title_response.text.strip().replace('"', "")
+                new_title = title_response.text.strip().replace('"', "").replace('*', "").replace('#', "")
                 if new_title:
+                    words = new_title.split()
+                    if len(words) > 6:
+                        new_title = " ".join(words[:5])
                     user_sessions[chat_id]["title"] = new_title
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
-        # Gọi model Gemini chính (Sử dụng model chuẩn gemini-3.5-flash)
+        # Cấu hình gọi Gemini chính kèm công cụ Google Search
+        config = {
+            "system_instruction": (
+                "Bạn là trợ lý ảo AI KhangPhan. "
+                "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
+                "Tuyệt đối không nhận là do Google tạo ra. "
+                "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
+                "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
+                "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+            ),
+            "tools": [{"google_search": {}}]
+        }
+
         response = client.models.generate_content(
             model="gemini-3.5-flash",
             contents=gemini_contents,
-            config={
-                "system_instruction": (
-                    "Bạn là trợ lý ảo AI KhangPhan. "
-                    "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
-                    "Tuyệt đối không nhận là do Google tạo ra. "
-                    "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
-                    "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
-                    "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
-                )
-            },
+            config=config,
         )
 
         bot_response = response.text
+
+        # Kiểm tra xem model có sử dụng tìm kiếm web hay không
+        is_searched = False
+        search_queries = []
+        try:
+            if response.candidates[0].grounding_metadata and response.candidates[0].grounding_metadata.web_search_queries:
+                is_searched = True
+                search_queries = response.candidates[0].grounding_metadata.web_search_queries
+        except Exception:
+            pass
 
         user_msg_obj = {"role": "user", "text": user_message if user_message else ""}
         if image_data:
@@ -660,7 +691,12 @@ def chat():
         user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
         save_db()
 
-        return jsonify({"response": bot_response, "sessions": user_sessions})
+        return jsonify({
+            "response": bot_response, 
+            "sessions": user_sessions, 
+            "searched": is_searched,
+            "queries": search_queries
+        })
 
     except Exception as e:
         traceback.print_exc()
