@@ -1,15 +1,15 @@
-import json
-import traceback
-import os
 import base64
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
+import json
+import os
+import traceback
+from authlib.integrations.flask_client import OAuth
+from flask import Flask, jsonify, redirect, render_template_string, request, session, url_for
 from google import genai
 from google.genai import types
-from authlib.integrations.flask_client import OAuth
 import khangphan_memory
 
 app = Flask(__name__)
-app.secret_key = '07062014'  # Khóa bảo mật cho session
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
 
 # Khởi tạo client Gemini API từ biến môi trường
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
@@ -17,41 +17,43 @@ client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 # Cấu hình OAuth cho Google lấy từ biến môi trường
 oauth = OAuth(app)
 google = oauth.register(
-    name='google',
-    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
-    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
+    name="google",
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
 )
 
 # Tải bộ nhớ dữ liệu toàn cục qua khangphan_memory
 db = khangphan_memory.load_memory_data()
-users_db = db.setdefault("users", {})          
-all_chat_sessions = db.setdefault("sessions", {})  
-all_server_histories = db.setdefault("histories", {}) 
+users_db = db.setdefault("users", {})
+all_chat_sessions = db.setdefault("sessions", {})
+all_server_histories = db.setdefault("histories", {})
+
 
 def get_current_user_sessions():
-    user = session.get('user')
+    user = session.get("user")
     if not user:
         return {}
     if user not in all_chat_sessions:
         all_chat_sessions[user] = {}
     return all_chat_sessions[user]
 
+
 def get_current_user_histories():
-    user = session.get('user')
+    user = session.get("user")
     if not user:
         return {}
     if user not in all_server_histories:
         all_server_histories[user] = {}
     return all_server_histories[user]
 
+
 def save_db():
-    khangphan_memory.save_memory_data({
-        "sessions": all_chat_sessions,
-        "histories": all_server_histories,
-        "users": users_db
-    })
+    khangphan_memory.save_memory_data(
+        {"sessions": all_chat_sessions, "histories": all_server_histories, "users": users_db}
+    )
+
 
 # ==================== HTML TEMPLATES ====================
 
@@ -226,7 +228,6 @@ CHAT_HTML_TEMPLATE = """
     <title>AI KhangPhan - Trợ lý ảo thông minh</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Thêm thư viện Marked.js để định dạng Markdown -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
@@ -320,7 +321,6 @@ CHAT_HTML_TEMPLATE = """
         }
         renderHistoryList();
 
-        // Xử lý dán ảnh từ Clipboard (Ctrl + V)
         document.getElementById('userInput').addEventListener('paste', function(event) {
             const items = (event.clipboardData || event.originalEvent.clipboardData).items;
             for (let index in items) {
@@ -503,90 +503,95 @@ CHAT_HTML_TEMPLATE = """
 
 # ==================== FLASK ROUTES ====================
 
-@app.route('/')
+@app.route("/")
 def index():
-    if 'user' not in session:
+    if "user" not in session:
         return render_template_string(LOGIN_HTML_TEMPLATE)
     user_sessions = get_current_user_sessions()
     return render_template_string(CHAT_HTML_TEMPLATE, sessions=user_sessions)
 
-@app.route('/login', methods=['POST'])
+
+@app.route("/login", methods=["POST"])
 def login():
     data = request.json
-    email = data.get('email')
-    password = data.get('password')
+    email = data.get("email")
+    password = data.get("password")
     if not email or not password:
         return jsonify({"success": False, "error": "Vui lòng điền đủ thông tin!"}), 400
     if email in users_db and users_db[email] == password:
-        session['user'] = email
+        session["user"] = email
         return jsonify({"success": True, "redirect": "/"})
     return jsonify({"success": False, "error": "Email hoặc mật khẩu không đúng!"}), 401
 
-@app.route('/register', methods=['POST'])
+
+@app.route("/register", methods=["POST"])
 def register():
     data = request.json
-    email = data.get('email')
-    password = data.get('password')
+    email = data.get("email")
+    password = data.get("password")
     if not email or not password:
         return jsonify({"success": False, "error": "Vui lòng điền đủ thông tin!"}), 400
     if email in users_db:
         return jsonify({"success": False, "error": "Tài khoản đã tồn tại!"}), 400
     users_db[email] = password
     save_db()
-    session['user'] = email
+    session["user"] = email
     return jsonify({"success": True, "redirect": "/"})
 
-@app.route('/login/google')
+
+@app.route("/login/google")
 def google_login():
-    redirect_uri = url_for('google_authorize', _external=True)
+    redirect_uri = url_for("google_authorize", _external=True)
     return google.authorize_redirect(redirect_uri)
 
-@app.route('/login/google/authorize')
+
+@app.route("/login/google/authorize")
 def google_authorize():
     token = google.authorize_access_token()
-    resp = google.get('https://www.googleapis.com/oauth2/v1/userinfo')
+    resp = google.get("https://www.googleapis.com/oauth2/v1/userinfo")
     user_info = resp.json()
-    email = user_info.get('email')
+    email = user_info.get("email")
     if email:
         if email not in users_db:
             users_db[email] = "GOOGLE_OAUTH_USER"
             save_db()
-        session['user'] = email
-        return redirect(url_for('index'))
-    return redirect(url_for('index'))
+        session["user"] = email
+        return redirect(url_for("index"))
+    return redirect(url_for("index"))
 
-@app.route('/logout')
+
+@app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for('index'))
+    return redirect(url_for("index"))
 
-@app.route('/new_chat', methods=['POST'])
+
+@app.route("/new_chat", methods=["POST"])
 def new_chat():
     user_sessions = get_current_user_sessions()
     data = request.json
-    chat_id = data.get('chat_id')
+    chat_id = data.get("chat_id")
     if chat_id:
-        user_sessions[chat_id] = {
-            "title": "Cuộc trò chuyện mới",
-            "messages": []
-        }
+        user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
         save_db()
     return jsonify({"success": True, "sessions": user_sessions})
 
-@app.route('/delete_chat', methods=['POST'])
+
+@app.route("/delete_chat", methods=["POST"])
 def delete_chat_route():
     user_sessions = get_current_user_sessions()
     data = request.json
-    chat_id = data.get('chat_id')
+    chat_id = data.get("chat_id")
     if chat_id in user_sessions:
         del user_sessions[chat_id]
         save_db()
     return jsonify({"success": True, "sessions": user_sessions})
 
-@app.route('/chat', methods=['POST'])
+
+@app.route("/chat", methods=["POST"])
 def chat():
     try:
-        user = session.get('user')
+        user = session.get("user")
         if not user:
             return jsonify({"error": "Chưa đăng nhập"}), 401
 
@@ -600,48 +605,41 @@ def chat():
 
         user_sessions = get_current_user_sessions()
         if chat_id not in user_sessions:
-            user_sessions[chat_id] = {
-                "title": "Cuộc trò chuyện mới",
-                "messages": []
-            }
+            user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
 
         gemini_contents = []
-        
+
         if image_data:
             header, encoded = image_data.split(",", 1)
             mime_type = header.split(";")[0].split(":")[1]
             image_bytes = base64.b64decode(encoded)
-            gemini_contents.append(
-                types.Part.from_bytes(
-                    data=image_bytes,
-                    mime_type=mime_type,
-                )
-            )
-        
+            gemini_contents.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+
         if user_message:
             gemini_contents.append(user_message)
         else:
             gemini_contents.append("Hãy mô tả hoặc phân tích bức ảnh này giúp tôi.")
 
-        # Tạo tiêu đề tự động nếu là chat mới
+        # Tạo tiêu đề tự động nếu là chat mới (dùng model 'gemini-3.5-flash-lite' chuẩn)
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
                 title_response = client.models.generate_content(
-                    model='gemini-3.5-flash-lite',
-                    contents=f"Đặt một tiêu đề ngắn gọn dưới 5 từ cho nội dung: '{title_prompt}'"
+                    model="gemini-3.5-flash-lite",
+                    contents=f"Đặt một tiêu đề ngắn gọn dưới 5 từ cho nội dung: '{title_prompt}'",
                 )
-                new_title = title_response.text.strip().replace('"', '')
+                new_title = title_response.text.strip().replace('"', "")
                 if new_title:
                     user_sessions[chat_id]["title"] = new_title
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
+        # Gọi model Gemini chính với cấu hình chuẩn
         response = client.models.generate_content(
-            model='gemini-3.5-flash-lite',
+            model="gemini-3.5-flash-lite",
             contents=gemini_contents,
             config={
-                'system_instruction': (
+                "system_instruction": (
                     "Bạn là trợ lý ảo AI KhangPhan. "
                     "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
                     "Tuyệt đối không nhận là do Google tạo ra. "
@@ -649,36 +647,35 @@ def chat():
                     "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
                     "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
                 )
-            }
+            },
         )
-        
+
         bot_response = response.text
 
-        # Lưu lại tin nhắn vào session
         user_msg_obj = {"role": "user", "text": user_message if user_message else ""}
         if image_data:
             user_msg_obj["image"] = image_data
-            
+
         user_sessions[chat_id]["messages"].append(user_msg_obj)
         user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
         save_db()
 
-        return jsonify({
-            "response": bot_response,
-            "sessions": user_sessions
-        })
+        return jsonify({"response": bot_response, "sessions": user_sessions})
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/privacy')
+
+@app.route("/privacy")
 def privacy_policy():
     return "<h1>Chính sách bảo mật AI KhangPhan</h1>"
 
-@app.route('/terms')
+
+@app.route("/terms")
 def terms_of_service():
     return "<h1>Điều khoản dịch vụ AI KhangPhan</h1>"
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
