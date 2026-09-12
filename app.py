@@ -292,7 +292,7 @@ CHAT_HTML_TEMPLATE = """
             <span id="chatTitleHeader">AI KhangPhan</span>
         </div>
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hômాం nay?</div>
+            <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
         </div>
         <div class="chat-input-container">
             <div id="imagePreviewContainer" style="display: none; padding: 5px 10px; align-items: center; gap: 10px; background: #1e1f20; border-radius: 12px 12px 0 0; max-width: 900px; margin: 0 auto; border-left: 1px solid #333; border-right: 1px solid #333; border-top: 1px solid #333;">
@@ -317,7 +317,6 @@ CHAT_HTML_TEMPLATE = """
             currentChatId = sessionKeys[0];
             loadChatSession(currentChatId);
         } else {
-            // Khởi tạo sẵn ID ngay lập tức tránh lỗi thiếu chat_id khi vừa vào trang
             currentChatId = 'chat_' + Date.now();
             chatSessions[currentChatId] = { title: "Cuộc trò chuyện mới", messages: [] };
         }
@@ -451,7 +450,6 @@ CHAT_HTML_TEMPLATE = """
             const messageText = input.value.trim();
             if (!messageText && !attachedImageBase64) return;
 
-            // Đảm bảo luôn có currentChatId hợp lệ trước khi gửi
             if (!currentChatId) {
                 currentChatId = 'chat_' + Date.now();
                 chatSessions[currentChatId] = { title: "Cuộc trò chuyện mới", messages: [] };
@@ -483,7 +481,6 @@ CHAT_HTML_TEMPLATE = """
             botMsg.innerHTML = "Đang suy nghĩ... 💭";
             chatMessages.appendChild(botMsg);
 
-            // Hiệu ứng trạng thái tìm kiếm web thông minh
             if (payloadText && (payloadText.toLowerCase().includes('bão') || payloadText.toLowerCase().includes('mới nhất') || payloadText.toLowerCase().includes('hôm nay') || payloadText.toLowerCase().includes('là ai') || payloadText.toLowerCase().includes('thời tiết') || payloadText.toLowerCase().includes('update'))) {
                 botMsg.innerHTML = `🔍 Đang tìm thông tin về: <i>"${payloadText}"</i>...`;
             }
@@ -644,7 +641,7 @@ def chat():
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
                 title_response = client.models.generate_content(
-                    model="gemini-3.5-flash",
+                    model="gemini-2.5-flash",
                     contents=(
                         f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
                         "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
@@ -673,7 +670,7 @@ def chat():
         }
 
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-2.5-flash",
             contents=gemini_contents,
             config=config,
         )
