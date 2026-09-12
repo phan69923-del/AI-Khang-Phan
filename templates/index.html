@@ -15,80 +15,45 @@
             font-family: 'Inter', sans-serif;
         }
 
+        :root {
+            --bg-body: #131314;
+            --bg-sidebar: #1e1f20;
+            --border-sidebar: #2b2c2d;
+            --text-main: #e3e3e3;
+            --text-muted: #aaaaaa;
+            --hover-bg: #2b2c2d;
+            --active-bg: #2b2c2d;
+            --input-bg: #1e1f20;
+            --input-border: #333333;
+            --bot-bg: #1e1f20;
+            --user-bg: #2b2c2d;
+            --btn-bg: #2b2c2d;
+            --btn-hover: #38393a;
+        }
+
+        body.light-mode {
+            --bg-body: #ffffff;
+            --bg-sidebar: #f0f4f9;
+            --border-sidebar: #d9d9d9;
+            --text-main: #1f1f1f;
+            --text-muted: #555555;
+            --hover-bg: #e2e8f0;
+            --active-bg: #d7e3fc;
+            --input-bg: #f0f4f9;
+            --input-border: #d9d9d9;
+            --bot-bg: #f0f4f9;
+            --user-bg: #e2e8f0;
+            --btn-bg: #e2e8f0;
+            --btn-hover: #cbd5e1;
+        }
+
         body {
-            background-color: #131314;
-            color: #e3e3e3;
+            background-color: var(--bg-body);
+            color: var(--text-main);
             display: flex;
             height: 100vh;
             overflow: hidden;
             transition: background 0.3s, color 0.3s;
-        }
-
-        /* Chế độ Sáng (Light Mode) */
-        body.light-mode {
-            background-color: #ffffff;
-            color: #1f1f1f;
-        }
-        body.light-mode .sidebar {
-            background-color: #f0f4f9;
-            border-right: 1px solid #d9d9d9;
-        }
-        body.light-mode .sidebar-logo-container span,
-        body.light-mode .new-chat-btn,
-        body.light-mode .history-item {
-            color: #1f1f1f;
-        }
-        body.light-mode .new-chat-btn {
-            background-color: #e2e8f0;
-        }
-        body.light-mode .new-chat-btn:hover {
-            background-color: #cbd5e1;
-        }
-        body.light-mode .history-item:hover, 
-        body.light-mode .history-item.active {
-            background-color: #e2e8f0;
-        }
-        body.light-mode .sidebar-footer {
-            border-top: 1px solid #d9d9d9;
-            color: #555555;
-        }
-        body.light-mode .footer-btn {
-            background-color: #e2e8f0;
-            color: #1f1f1f;
-        }
-        body.light-mode .footer-btn:hover {
-            background-color: #cbd5e1;
-        }
-        body.light-mode .chat-header {
-            border-bottom: 1px solid #d9d9d9;
-            color: #444444;
-        }
-        body.light-mode .main-chat {
-            background-color: #ffffff;
-        }
-        body.light-mode .message.bot {
-            background-color: #f0f4f9;
-            color: #1f1f1f;
-            border: 1px solid #d9d9d9;
-        }
-        body.light-mode .message.user {
-            background-color: #e2e8f0;
-            color: #1f1f1f;
-        }
-        body.light-mode .chat-input-box {
-            background-color: #f0f4f9;
-            border: 1px solid #d9d9d9;
-        }
-        body.light-mode .chat-input-box textarea {
-            color: #1f1f1f;
-        }
-        body.light-mode .send-btn,
-        body.light-mode .upload-btn {
-            color: #0b57d0;
-        }
-        body.light-mode .history-actions button:hover {
-            background-color: #cbd5e1;
-            color: #1f1f1f;
         }
 
         /* Overlay nền mờ trên mobile */
@@ -109,8 +74,8 @@
         /* Sidebar */
         .sidebar {
             width: 260px;
-            background-color: #1e1f20;
-            border-right: 1px solid #2b2c2d;
+            background-color: var(--bg-sidebar);
+            border-right: 1px solid var(--border-sidebar);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -119,7 +84,7 @@
             left: 0;
             top: 0;
             z-index: 1000;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s, border-color 0.3s;
             padding-bottom: env(safe-area-inset-bottom);
         }
 
@@ -153,7 +118,7 @@
         }
 
         .sidebar-logo-container span {
-            color: #ffffff;
+            color: var(--text-main);
             font-weight: 600;
             font-size: 15px;
         }
@@ -162,7 +127,7 @@
             display: none;
             background: none;
             border: none;
-            color: #ffffff;
+            color: var(--text-main);
             font-size: 18px;
             cursor: pointer;
             padding: 6px;
@@ -170,15 +135,15 @@
             transition: background 0.2s;
         }
         .sidebar-close-btn:hover {
-            background-color: #2b2c2d;
+            background-color: var(--hover-bg);
         }
 
         .new-chat-btn {
             display: flex;
             align-items: center;
             gap: 10px;
-            background-color: #2b2c2d;
-            color: #ffffff;
+            background-color: var(--btn-bg);
+            color: var(--text-main);
             border: none;
             padding: 12px 16px;
             border-radius: 30px;
@@ -190,7 +155,7 @@
         }
 
         .new-chat-btn:hover {
-            background-color: #38393a;
+            background-color: var(--btn-hover);
         }
 
         .chat-history {
@@ -206,16 +171,22 @@
             padding: 10px 12px;
             border-radius: 20px;
             font-size: 14px;
-            color: #cccccc;
+            color: var(--text-muted);
             cursor: pointer;
             margin-top: 5px;
-            transition: background 0.2s;
+            transition: background 0.2s, color 0.2s;
             position: relative;
         }
 
-        .history-item:hover, .history-item.active {
-            background-color: #2b2c2d;
-            color: #ffffff;
+        .history-item:hover {
+            background-color: var(--hover-bg);
+            color: var(--text-main);
+        }
+
+        .history-item.active {
+            background-color: var(--active-bg);
+            color: var(--text-main);
+            font-weight: 500;
         }
 
         .history-text {
@@ -237,7 +208,7 @@
         .history-actions button {
             background: none;
             border: none;
-            color: #aaaaaa;
+            color: var(--text-muted);
             cursor: pointer;
             padding: 4px 6px;
             font-size: 12px;
@@ -246,16 +217,17 @@
         }
 
         .history-actions button:hover {
-            background-color: #38393a;
-            color: #ffffff;
+            background-color: var(--btn-hover);
+            color: var(--text-main);
         }
 
         .sidebar-footer {
             padding: 16px;
             padding-bottom: calc(16px + env(safe-area-inset-bottom));
-            border-top: 1px solid #2b2c2d;
+            border-top: 1px solid var(--border-sidebar);
             font-size: 13px;
-            color: #aaaaaa;
+            color: var(--text-muted);
+            transition: border-color 0.3s;
         }
 
         .footer-actions {
@@ -270,8 +242,8 @@
             align-items: center;
             justify-content: center;
             gap: 6px;
-            background-color: #2b2c2d;
-            color: #ffffff;
+            background-color: var(--btn-bg);
+            color: var(--text-main);
             border: none;
             padding: 8px 10px;
             border-radius: 16px;
@@ -283,7 +255,7 @@
         }
 
         .footer-btn:hover {
-            background-color: #38393a;
+            background-color: var(--btn-hover);
         }
 
         /* Main Chat Area */
@@ -293,8 +265,8 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            background-color: #131314;
-            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background-color: var(--bg-body);
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s;
         }
 
         .main-chat.expanded {
@@ -306,11 +278,12 @@
             padding: 16px 24px;
             font-size: 16px;
             font-weight: 500;
-            color: #c4c7c5;
-            border-bottom: 1px solid #2b2c2d;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-sidebar);
             display: flex;
             align-items: center;
             gap: 12px;
+            transition: border-color 0.3s;
         }
 
         .sidebar-toggle-btn {
@@ -325,12 +298,15 @@
             transition: background 0.2s;
         }
         .sidebar-toggle-btn:hover {
-            background-color: #2b2c2d;
+            background-color: var(--hover-bg);
         }
         .sidebar-toggle-btn img {
             width: 20px;
             height: 20px;
-            filter: invert(1);
+            filter: var(--toggle-icon-filter, invert(1));
+        }
+        body.light-mode .sidebar-toggle-btn img {
+            filter: invert(0);
         }
 
         .chat-messages {
@@ -356,17 +332,17 @@
         }
 
         .message.user {
-            background-color: #2b2c2d;
+            background-color: var(--user-bg);
             align-self: flex-end;
-            color: #ffffff;
+            color: var(--text-main);
             border-bottom-right-radius: 4px;
         }
 
         .message.bot {
-            background-color: #1e1f20;
+            background-color: var(--bot-bg);
             align-self: flex-start;
-            color: #e3e3e3;
-            border: 1px solid #2b2c2d;
+            color: var(--text-main);
+            border: 1px solid var(--border-sidebar);
             border-bottom-left-radius: 4px;
         }
 
@@ -382,16 +358,16 @@
             background-color: transparent;
         }
 
-        /* Khu vực hiển thị ảnh xem trước trước khi gửi */
+        /* Khu vực hiển thị ảnh xem trước */
         .image-preview-container {
             max-width: 900px;
             margin: 0 auto 8px auto;
             display: none;
             gap: 10px;
             padding: 8px;
-            background: #1e1f20;
+            background: var(--input-bg);
             border-radius: 12px;
-            border: 1px solid #333;
+            border: 1px solid var(--input-border);
             align-items: center;
             width: fit-content;
         }
@@ -420,20 +396,20 @@
         .chat-input-box {
             max-width: 900px;
             margin: 0 auto;
-            background-color: #1e1f20;
+            background-color: var(--input-bg);
             border-radius: 30px;
             display: flex;
             align-items: center;
             padding: 8px 16px;
-            border: 1px solid #333333;
+            border: 1px solid var(--input-border);
             gap: 8px;
+            transition: background-color 0.3s, border-color 0.3s;
         }
 
-        /* Nút chọn ảnh upload */
         .upload-btn {
             background: none;
             border: none;
-            color: #c4c7c5;
+            color: var(--text-muted);
             font-size: 18px;
             cursor: pointer;
             padding: 8px;
@@ -444,15 +420,15 @@
             transition: background 0.2s, color 0.2s;
         }
         .upload-btn:hover {
-            background-color: #2b2c2d;
-            color: #ffffff;
+            background-color: var(--hover-bg);
+            color: var(--text-main);
         }
 
         .chat-input-box textarea {
             flex: 1;
             background: none;
             border: none;
-            color: #ffffff;
+            color: var(--text-main);
             font-size: 15px;
             resize: none;
             outline: none;
@@ -470,9 +446,12 @@
             border-radius: 50%;
             transition: background 0.2s;
         }
+        body.light-mode .send-btn {
+            color: #0b57d0;
+        }
 
         .send-btn:hover {
-            background-color: #2b2c2d;
+            background-color: var(--hover-bg);
         }
 
         @media (max-width: 768px) {
@@ -524,8 +503,9 @@
         <div class="sidebar-footer">
             <div> Khang Phan WorkSpace </div>
             <div class="footer-actions">
-                <button class="footer-btn" onclick="toggleTheme()">
-                    <i class="fa-solid fa-circle-half-stroke"></i> Giao diện
+                <!-- Nút chuyển đổi Giao diện Sáng/Tối -->
+                <button class="footer-btn" id="themeToggleBtn" onclick="toggleTheme()">
+                    <i class="fa-solid fa-moon" id="themeIcon"></i> <span id="themeText">Giao diện</span>
                 </button>
                 <a href="/logout" class="footer-btn">
                     <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
@@ -572,7 +552,7 @@
     <script>
         let initialId = 'chat_' + Date.now();
         let currentChatId = initialId;
-        let selectedBase64Image = null; // Biến lưu ảnh tạm thời
+        let selectedBase64Image = null;
         
         let sessions = {
             [initialId]: { 
@@ -580,6 +560,30 @@
                 messages: [{ role: 'bot', text: "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?" }] 
             }
         };
+
+        // Khởi tạo trạng thái giao diện theo localStorage hoặc mặc định tối
+        if (localStorage.getItem('theme') === 'light') {
+            document.body.classList.add('light-mode');
+            updateThemeIcon(true);
+        } else {
+            updateThemeIcon(false);
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            updateThemeIcon(isLight);
+        }
+
+        function updateThemeIcon(isLight) {
+            const icon = document.getElementById('themeIcon');
+            if (isLight) {
+                icon.className = "fa-solid fa-sun";
+            } else {
+                icon.className = "fa-solid fa-moon";
+            }
+        }
 
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -610,7 +614,6 @@
             }
         }
 
-        // Xử lý dán ảnh trực tiếp từ bàn phím (Ctrl + V)
         document.getElementById('userInput').addEventListener('paste', function(event) {
             const items = (event.clipboardData || event.originalEvent.clipboardData).items;
             for (let index in items) {
@@ -645,10 +648,6 @@
             selectedBase64Image = null;
             document.getElementById('imagePreviewContainer').classList.remove('active');
             document.getElementById('imageUpload').value = '';
-        }
-
-        function toggleTheme() {
-            document.body.classList.toggle('light-mode');
         }
 
         function startNewChat() {
@@ -745,7 +744,6 @@
 
             const chatMessages = document.getElementById('chatMessages');
             
-            // Hiển thị tin nhắn người dùng lên giao diện
             const userMsg = document.createElement('div');
             userMsg.className = 'message user';
             if (currentImg) {
@@ -764,7 +762,6 @@
                 sessions[currentChatId].title = (messageText || "Hình ảnh").length > 25 ? (messageText || "Hình ảnh").substring(0, 25) + '...' : (messageText || "Hình ảnh");
             }
 
-            // Reset input và ảnh preview
             input.value = '';
             input.style.height = 'auto';
             removeSelectedImage();
