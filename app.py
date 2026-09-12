@@ -292,7 +292,7 @@ CHAT_HTML_TEMPLATE = """
             <span id="chatTitleHeader">AI KhangPhan</span>
         </div>
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
+            <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hômాం nay?</div>
         </div>
         <div class="chat-input-container">
             <div id="imagePreviewContainer" style="display: none; padding: 5px 10px; align-items: center; gap: 10px; background: #1e1f20; border-radius: 12px 12px 0 0; max-width: 900px; margin: 0 auto; border-left: 1px solid #333; border-right: 1px solid #333; border-top: 1px solid #333;">
@@ -317,7 +317,9 @@ CHAT_HTML_TEMPLATE = """
             currentChatId = sessionKeys[0];
             loadChatSession(currentChatId);
         } else {
-            startNewChat(false);
+            // Khởi tạo sẵn ID ngay lập tức tránh lỗi thiếu chat_id khi vừa vào trang
+            currentChatId = 'chat_' + Date.now();
+            chatSessions[currentChatId] = { title: "Cuộc trò chuyện mới", messages: [] };
         }
         renderHistoryList();
 
@@ -365,19 +367,18 @@ CHAT_HTML_TEMPLATE = """
 
         async function startNewChat(autoRender = true) {
             const newId = 'chat_' + Date.now();
+            currentChatId = newId;
+            chatSessions[newId] = { title: "Cuộc trò chuyện mới", messages: [] };
+            if (autoRender) {
+                loadChatSession(newId);
+            }
+            renderHistoryList();
             try {
-                const response = await fetch('/new_chat', {
+                await fetch('/new_chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chat_id: newId })
                 });
-                const data = await response.json();
-                if (response.ok) {
-                    chatSessions = data.sessions;
-                    if (autoRender) {
-                        loadChatSession(newId);
-                    }
-                }
             } catch (e) { console.error(e); }
         }
 
@@ -450,6 +451,12 @@ CHAT_HTML_TEMPLATE = """
             const messageText = input.value.trim();
             if (!messageText && !attachedImageBase64) return;
 
+            // Đảm bảo luôn có currentChatId hợp lệ trước khi gửi
+            if (!currentChatId) {
+                currentChatId = 'chat_' + Date.now();
+                chatSessions[currentChatId] = { title: "Cuộc trò chuyện mới", messages: [] };
+            }
+
             const chatMessages = document.getElementById('chatMessages');
             const userMsg = document.createElement('div');
             userMsg.className = 'message user';
@@ -476,8 +483,8 @@ CHAT_HTML_TEMPLATE = """
             botMsg.innerHTML = "Đang suy nghĩ... 💭";
             chatMessages.appendChild(botMsg);
 
-            // Hiệu ứng trạng thái đang tra cứu nếu câu hỏi cần tìm kiếm thông tin thời sự/web
-            if (payloadText && (payloadText.toLowerCase().includes('bão') || payloadText.toLowerCase().includes('mới nhất') || payloadText.toLowerCase().includes('hôm nay') || payloadText.toLowerCase().includes('là ai') || payloadText.toLowerCase().includes('thời tiết'))) {
+            // Hiệu ứng trạng thái tìm kiếm web thông minh
+            if (payloadText && (payloadText.toLowerCase().includes('bão') || payloadText.toLowerCase().includes('mới nhất') || payloadText.toLowerCase().includes('hôm nay') || payloadText.toLowerCase().includes('là ai') || payloadText.toLowerCase().includes('thời tiết') || payloadText.toLowerCase().includes('update'))) {
                 botMsg.innerHTML = `🔍 Đang tìm thông tin về: <i>"${payloadText}"</i>...`;
             }
 
@@ -632,7 +639,7 @@ def chat():
         else:
             gemini_contents.append("Hãy mô tả hoặc phân tích bức ảnh này giúp tôi.")
 
-        # Tạo tiêu đề tự động (Ép model chỉ trả về đúng tiêu đề ngắn gọn dưới 5 từ, cấm giải thích)
+        # Tạo tiêu đề tự động gọn gàng, chống lải nhải
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
@@ -652,7 +659,7 @@ def chat():
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
-        # Cấu hình gọi Gemini chính kèm công cụ Google Search
+        # Cấu hình gọi Gemini chính kèm Google Search Tool
         config = {
             "system_instruction": (
                 "Bạn là trợ lý ảo AI KhangPhan. "
@@ -673,7 +680,7 @@ def chat():
 
         bot_response = response.text
 
-        # Kiểm tra xem model có sử dụng tìm kiếm web hay không
+        # Kiểm tra xem model có thực hiện tìm kiếm web không
         is_searched = False
         search_queries = []
         try:
