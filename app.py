@@ -656,49 +656,50 @@ def chat():
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
-          config = {
-            "system_instruction": (
-                "Bạn là trợ lý ảo AI KhangPhan. "
-                "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
-                "Tuyệt đối không nhận là do Google tạo ra. "
-                "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
-                "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
-                "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
-            ),
-        }
+     config = {
+        "system_instruction": (
+            "Bạn là trợ lý ảo AI KhangPhan. "
+            "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
+            "Tuyệt đối không nhận là do Google tạo ra. "
+            "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
+            "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
+            "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+        ),
+    }
 
-        response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
-            contents=gemini_contents,
-            config=config,
-        )
+    response = client.models.generate_content(
+        model="gemini-3.5-flash-lite",
+        contents=gemini_contents,
+        config=config,
+    )
 
-        bot_response = response.text
+    bot_response = response.text
 
-        # Kiểm tra xem model có thực hiện tìm kiếm web không
-        is_searched = False
-        search_queries = []
-        try:
-            if response.candidates and response.candidates.grounding_metadata and response.candidates.grounding_metadata.web_search_queries:
-                is_searched = True
-                search_queries = response.candidates.grounding_metadata.web_search_queries
-        except Exception:
-            pass
+    # Kiểm tra xem model có thực hiện tìm kiếm web không
+    is_searched = False
+    search_queries = []
+    try:
+        if response.candidates and response.candidates.grounding_metadata and response.candidates.grounding_metadata.web_search_queries:
+            is_searched = True
+            search_queries = response.candidates.grounding_metadata.web_search_queries
+    except Exception:
+        pass
 
-        user_msg_obj = {"role": "user", "text": user_message if user_message else ""}
-        if image_data:
-            user_msg_obj["image"] = image_data
+    user_msg_obj = {"role": "user", "text": user_message if user_message else ""}
+    if image_data:
+        user_msg_obj["image"] = image_data
 
-        user_sessions[chat_id]["messages"].append(user_msg_obj)
-        user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
-        save_db()
+    user_sessions[chat_id]["messages"].append(user_msg_obj)
+    user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
+    save_db()
 
-        return jsonify({
-            "response": bot_response, 
-            "sessions": user_sessions, 
-            "searched": is_searched,
-            "queries": search_queries
-        })
+    return jsonify({
+        "response": bot_response, 
+        "sessions": user_sessions, 
+        "searched": is_searched,
+        "queries": search_queries
+    })
+
 
     except Exception as e:
         traceback.print_exc()
