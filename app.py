@@ -619,7 +619,7 @@ def chat():
         if chat_id not in user_sessions:
             user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
 
-        # Xây dựng lại ngữ cảnh chat cũ từ bộ nhớ để AI nhớ lịch sử trò chuyện
+        # Xây dựng lại ngữ cảnh chat cũ từ bộ nhớ
         gemini_contents = []
         for msg in user_sessions[chat_id]["messages"]:
             role = "user" if msg["role"] == "user" else "model"
@@ -633,7 +633,7 @@ def chat():
                 except Exception:
                     pass
             if "text" in msg and msg["text"]:
-                content_parts.append(msg["text"])
+                content_parts.append(types.Part.from_text(text=msg["text"]))
             
             if content_parts:
                 gemini_contents.append(types.Content(role=role, parts=content_parts))
@@ -647,9 +647,9 @@ def chat():
             current_new_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
 
         if user_message:
-            current_new_parts.append(user_message)
+            current_new_parts.append(types.Part.from_text(text=user_message))
         else:
-            current_new_parts.append("Hãy mô tả hoặc phân tích bức ảnh này giúp tôi.")
+            current_new_parts.append(types.Part.from_text(text="Hãy mô tả hoặc phân tích bức ảnh này giúp tôi."))
         
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
