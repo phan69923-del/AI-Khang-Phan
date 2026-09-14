@@ -704,16 +704,30 @@ def chat():
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
         # Tự động sinh tiêu đề nếu là chat mới
-        if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
+       if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
-                title_response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=(
-                        f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
-                        "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
-                    ),
-                )
+                
+                # Cố gắng sử dụng mô hình gemini-3.6-flash trước
+                try:
+                    title_response = client.models.generate_content(
+                        model="gemini-3.6-flash",
+                        contents=(
+                            f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
+                            "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
+                        ),
+                    )
+                except Exception as e_title_429:
+                    print(f"⚠️ gemini-3.6-flash bị lỗi/hết lượt đặt tiêu đề, tự động chuyển sang 3.5-flash-lite... Chi tiết: {e_title_429}")
+                    # Nếu lỗi 429, tự động đổi sang mô hình dự phòng gemini-3.5-flash-lite
+                    title_response = client.models.generate_content(
+                        model="gemini-3.5-flash-lite",
+                        contents=(
+                            f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
+                            "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
+                        ),
+                    )
+
                 new_title = title_response.text.strip().replace('"', "").replace('*', "").replace('#', "")
                 if new_title:
                     words = new_title.split()
@@ -721,8 +735,10 @@ def chat():
                         new_title = " ".join(words[:5])
                     user_sessions[chat_id]["title"] = new_title
             except Exception as e:
-                print(f"Lỗi tạo tiêu đề: {e}")
+                print(f"Lỗi tạo tiêu đề (cả 2 model đều không chạy được): {e}")
+                user_sessions[chat_id]["title"] = "Cuộc trò chuyện mới (Dự phòng)"
 
+        # ====== CẤU HÌNH HỆ THỐNG CHO TRỢ LÝ ẢO KHANGPHAN ======
         config = types.GenerateContentConfig(
             system_instruction=(
                 "Bạn là trợ lý ảo AI KhangPhan. "
@@ -734,11 +750,22 @@ def chat():
             ),
         )
 
-        response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
-            contents=gemini_contents,
-            config=config,
-        )
+        # ====== LUỒNG CHAT CHÍNH (ĐÃ THÊM DỰ PHÒNG FALLBACK) ======
+        try:
+            # Cố gắng sử dụng mô hình gemini-3.5-flash-lite trước theo đúng thứ tự của bạn
+            response = client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=gemini_contents,
+                config=config,
+            )
+        except Exception as e_chat_429:
+            print(f"⚠️ gemini-3.5-flash-lite bị lỗi/hết lượt chat, tự động chuyển sang 3.6-flash... Chi tiết: {e_chat_429}")
+            # Nếu lỗi 429, tự động đổi sang mô hình dự phòng gemini-3.6-flash để cứu cánh
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=gemini_contents,
+                config=config,
+            )
 
         bot_response = response.text
 
