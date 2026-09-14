@@ -392,7 +392,7 @@ CHAT_HTML_TEMPLATE = """
             <span id="chatTitleHeader">AI KhangPhan</span>
         </div>
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Chào sếp! Đã dọn sạch hình nền, giao diện tối giản cực kỳ mượt mà rồi nhé! ✨</div>
+            <div class="message bot">Chào bạn, tôi có thể giúp gì cho bạn?✨</div>
         </div>
         <div class="chat-input-container">
             <div id="imagePreviewContainer" style="display: none; padding: 5px 10px; align-items: center; gap: 10px; background: rgba(30, 31, 32, 0.9); backdrop-filter: blur(10px); border-radius: 12px 12px 0 0; max-width: 900px; margin: 0 auto; border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1); border-top: 1px solid rgba(255,255,255,0.1);">
