@@ -1,5 +1,6 @@
 import base64
 import os
+import time
 import traceback
 from authlib.integrations.flask_client import OAuth
 from flask import Flask, jsonify, redirect, render_template_string, request, session, url_for
@@ -11,6 +12,10 @@ from khangphan_memory import load_memory_data, save_memory_data
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
+
+# Tạo thư mục tạm lưu ảnh nếu chưa có
+TEMP_UPLOAD_FOLDER = "temp_uploads"
+os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
 
 # Khởi tạo client Gemini API từ biến môi trường
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
@@ -298,7 +303,7 @@ CHAT_HTML_TEMPLATE = """
         <div class="chat-input-container">
             <div id="imagePreviewContainer" style="display: none; padding: 5px 10px; align-items: center; gap: 10px; background: #1e1f20; border-radius: 12px 12px 0 0; max-width: 900px; margin: 0 auto; border-left: 1px solid #333; border-right: 1px solid #333; border-top: 1px solid #333;">
                 <img id="imagePreview" src="" alt="Preview" style="height: 50px; border-radius: 6px; object-fit: cover;">
-                <span style="font-size: 13px; color: #aaa; flex: 1;">Đã đính kèm ảnh</span>
+                <span style="font-size: 13px; color: #aaa; flex: 1;">Đã đính kèm ảnh (đã tối ưu mượt)</span>
                 <button onclick="removeAttachedImage()" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 14px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="chat-input-box" id="chatInputBox">
@@ -323,6 +328,7 @@ CHAT_HTML_TEMPLATE = """
         }
         renderHistoryList();
 
+        // Tự động nén ảnh khi dán (Ctrl + V) giúp gửi lên server nhanh nhẹn hơn
         document.getElementById('userInput').addEventListener('paste', function(event) {
             const items = (event.clipboardData || event.originalEvent.clipboardData).items;
             for (let index in items) {
@@ -331,11 +337,32 @@ CHAT_HTML_TEMPLATE = """
                     let blob = item.getAsFile();
                     let reader = new FileReader();
                     reader.onload = function(e) {
-                        attachedImageBase64 = e.target.result;
-                        document.getElementById('imagePreview').src = attachedImageBase64;
-                        document.getElementById('imagePreviewContainer').style.display = 'flex';
-                        document.getElementById('chatInputBox').style.borderTopLeftRadius = '0';
-                        document.getElementById('chatInputBox').style.borderTopRightRadius = '0';
+                        let img = new Image();
+                        img.onload = function() {
+                            let canvas = document.createElement('canvas');
+                            let ctx = canvas.getContext('2d');
+                            let maxWidth = 1024; // Giới hạn chiều rộng tối đa
+                            let width = img.width;
+                            let height = img.height;
+
+                            if (width > maxWidth) {
+                                height = Math.round((height * maxWidth) / width);
+                                width = maxWidth;
+                            }
+
+                            canvas.width = width;
+                            canvas.height = height;
+                            ctx.drawImage(img, 0, 0, width, height);
+
+                            // Xuất ra chuỗi base64 đã nén chất lượng 0.8
+                            attachedImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
+                            document.getElementById('imagePreview').src = attachedImageBase64;
+                            document.getElementById('imagePreviewContainer').style.display = 'flex';
+                            document.getElementById('chatInputBox').style.borderTopLeftRadius = '0';
+                            document.getElementById('chatInputBox').style.borderTopRightRadius = '0';
+                        };
+                        img.src = e.target.result;
                     };
                     reader.readAsDataURL(blob);
                     break;
@@ -479,7 +506,7 @@ CHAT_HTML_TEMPLATE = """
 
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
-            botMsg.innerHTML = "Đang suy nghĩ... 💭";
+            botMsg.innerHTML = "Đang xử lý ảnh và suy nghĩ... 💭";
             chatMessages.appendChild(botMsg);
 
             try {
@@ -603,6 +630,7 @@ def delete_chat_route():
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    temp_file_path = None
     try:
         user = session.get("user")
         if not user:
@@ -624,14 +652,18 @@ def chat():
         for msg in user_sessions[chat_id]["messages"]:
             role = "user" if msg["role"] == "user" else "model"
             content_parts = []
+            
+            # Xử lý lại lịch sử ảnh cũ (nếu có lưu đường dẫn hoặc base64 cũ)
             if "image" in msg and msg["image"]:
                 try:
-                    header, encoded = msg["image"].split(",", 1)
-                    mime_type = header.split(";")[0].split(":")[1]
-                    image_bytes = base64.b64decode(encoded)
-                    content_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+                    if msg["image"].startswith("data:image"):
+                        header, encoded = msg["image"].split(",", 1)
+                        mime_type = header.split(";")[0].split(":")[1]
+                        image_bytes = base64.b64decode(encoded)
+                        content_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
                 except Exception:
                     pass
+
             if "text" in msg and msg["text"]:
                 content_parts.append(types.Part.from_text(text=msg["text"]))
             
@@ -639,11 +671,30 @@ def chat():
                 gemini_contents.append(types.Content(role=role, parts=content_parts))
 
         current_new_parts = []
+        
+        # LOGIC TẠM: Lưu ảnh vào thư mục tạm, đẩy cho Gemini đọc xong -> XÓA LUÔN
         if image_data:
-            header, encoded = image_data.split(",", 1)
-            mime_type = header.split(";")[0].split(":")[1]
-            image_bytes = base64.b64decode(encoded)
-            current_new_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+            try:
+                header, encoded = image_data.split(",", 1)
+                mime_type = header.split(";")[0].split(":")[1]
+                image_bytes = base64.b64decode(encoded)
+                
+                # Tạo tên file tạm độc nhất
+                file_ext = mime_type.split("/")[-1]
+                if file_ext not in ["png", "jpeg", "jpg", "webp"]:
+                    file_ext = "jpg"
+                
+                temp_filename = f"img_{int(time.time() * 1000)}.{file_ext}"
+                temp_file_path = os.path.join(TEMP_UPLOAD_FOLDER, temp_filename)
+                
+                # Ghi ra thư mục tạm
+                with open(temp_file_path, "wb") as f:
+                    f.write(image_bytes)
+                
+                # Đưa vào phần gửi cho Gemini
+                current_new_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+            except Exception as e:
+                print(f"Lỗi xử lý ảnh tạm: {e}")
 
         if user_message:
             current_new_parts.append(types.Part.from_text(text=user_message))
@@ -652,6 +703,7 @@ def chat():
         
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
+        # Tự động sinh tiêu đề nếu là chat mới
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
@@ -717,6 +769,13 @@ def chat():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+    finally:
+        # XÓA LUÔN ẢNH KHỎI THƯ MỤC TẠM SAU KHI GỬI XONG CHO AI (Dù thành công hay lỗi)
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except Exception as e:
+                print(f"Lỗi khi xóa file tạm: {e}")
 
 
 @app.route("/privacy")
