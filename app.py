@@ -149,9 +149,9 @@ LOGIN_HTML_TEMPLATE = """
     <h2 id="form-title">Đăng Nhập AI</h2>
     <input type="text" id="email" placeholder="Email / Tên đăng nhập" autocomplete="off">
     <input type="password" id="password" placeholder="Mật khẩu" onkeypress="handleKeyPress(event)">
-    
+
     <button id="submit-btn" onclick="handleSubmit()">Đăng Nhập</button>
-    
+
     <div class="divider"><span>HOẶC</span></div>
 
     <a href="/login/google" class="google-btn">
@@ -187,7 +187,7 @@ LOGIN_HTML_TEMPLATE = """
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value.trim();
         const errorMsg = document.getElementById('error-msg');
-        
+
         if (!email || !password) {
             errorMsg.innerText = 'Vui lòng nhập đầy đủ thông tin!';
             return;
@@ -407,7 +407,7 @@ CHAT_HTML_TEMPLATE = """
             chatSessions[id].messages.forEach(msg => {
                 const msgDiv = document.createElement('div');
                 msgDiv.className = `message ${msg.role === 'user' ? 'user' : 'bot'}`;
-                
+
                 let htmlContent = '';
                 if (msg.image) {
                     htmlContent += `<img src="${msg.image}" style="max-width: 200px; display: block; margin-bottom: 8px; border-radius: 8px;">`;
@@ -458,7 +458,7 @@ CHAT_HTML_TEMPLATE = """
             const chatMessages = document.getElementById('chatMessages');
             const userMsg = document.createElement('div');
             userMsg.className = 'message user';
-            
+
             let htmlContent = '';
             if (attachedImageBase64) {
                 htmlContent += `<img src="${attachedImageBase64}" style="max-width: 200px; display: block; margin-bottom: 8px; border-radius: 8px;">`;
@@ -481,10 +481,6 @@ CHAT_HTML_TEMPLATE = """
             botMsg.innerHTML = "Đang suy nghĩ... 💭";
             chatMessages.appendChild(botMsg);
 
-            if (payloadText && (payloadText.toLowerCase().includes('bão') || payloadText.toLowerCase().includes('mới nhất') || payloadText.toLowerCase().includes('hôm nay') || payloadText.toLowerCase().includes('là ai') || payloadText.toLowerCase().includes('thời tiết') || payloadText.toLowerCase().includes('update'))) {
-                botMsg.innerHTML = `🔍 Đang tìm thông tin về: <i>"${payloadText}"</i>...`;
-            }
-
             try {
                 const response = await fetch('/chat', {
                     method: 'POST',
@@ -492,14 +488,14 @@ CHAT_HTML_TEMPLATE = """
                     body: JSON.stringify({ message: payloadText, chat_id: currentChatId, image: payloadImage })
                 });
                 const data = await response.json();
-                
+
                 if (response.ok && data.response) {
                     let finalOutput = "";
                     if (data.searched && data.queries && data.queries.length > 0) {
                         finalOutput += `<div style="font-size: 12px; color: #8ab4f8; margin-bottom: 6px; border-left: 2px solid #8ab4f8; padding-left: 6px;">🌐 Đã tìm kiếm: ${data.queries.join(', ')}</div>`;
                     }
                     finalOutput += marked.parse(data.response);
-                    
+
                     botMsg.innerHTML = finalOutput;
                     chatSessions = data.sessions;
                     document.getElementById('chatTitleHeader').textContent = chatSessions[currentChatId].title;
@@ -623,20 +619,41 @@ def chat():
         if chat_id not in user_sessions:
             user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
 
+        # Xây dựng lại ngữ cảnh chat cũ từ bộ nhớ để AI nhớ lịch sử trò chuyện
         gemini_contents = []
+        for msg in user_sessions[chat_id]["messages"]:
+            role = "user" if msg["role"] == "user" else "model"
+            content_parts = []
+            if "image" in msg and msg["image"]:
+                try:
+                    header, encoded = msg["image"].split(",", 1)
+                    mime_type = header.split(";")[0].split(":")[1]
+                    image_bytes = base64.b64decode(encoded)
+                    content_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+                except Exception:
+                    pass
+            if "text" in msg and msg["text"]:
+                content_parts.append(msg["text"])
+            
+            if content_parts:
+                gemini_contents.append(types.Content(role=role, parts=content_parts))
 
+        # Thêm tin nhắn mới nhất của người dùng
+        current_new_parts = []
         if image_data:
             header, encoded = image_data.split(",", 1)
             mime_type = header.split(";")[0].split(":")[1]
             image_bytes = base64.b64decode(encoded)
-            gemini_contents.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+            current_new_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
 
         if user_message:
-            gemini_contents.append(user_message)
+            current_new_parts.append(user_message)
         else:
-            gemini_contents.append("Hãy mô tả hoặc phân tích bức ảnh này giúp tôi.")
+            current_new_parts.append("Hãy mô tả hoặc phân tích bức ảnh này giúp tôi.")
+        
+        gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
-        # Tạo tiêu đề tự động gọn gàng, chống lải nhải
+        # Tạo tiêu đề tự động gọn gàng nếu là cuộc trò chuyện mới
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
@@ -656,8 +673,8 @@ def chat():
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
 
-        config = {
-            "system_instruction": (
+        config = types.GenerateContentConfig(
+            system_instruction=(
                 "Bạn là trợ lý ảo AI KhangPhan. "
                 "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai. "
                 "Tuyệt đối không nhận là do Google tạo ra. "
@@ -665,7 +682,7 @@ def chat():
                 "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
                 "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
             ),
-        }
+        )
 
         response = client.models.generate_content(
             model="gemini-3.5-flash-lite",
@@ -678,9 +695,9 @@ def chat():
         is_searched = False
         search_queries = []
         try:
-            if response.candidates and response.candidates.grounding_metadata and response.candidates.grounding_metadata.web_search_queries:
+            if response.candidates and response.candidates[0].grounding_metadata and response.candidates[0].grounding_metadata.web_search_queries:
                 is_searched = True
-                search_queries = response.candidates.grounding_metadata.web_search_queries
+                search_queries = response.candidates[0].grounding_metadata.web_search_queries
         except Exception:
             pass
 
@@ -691,7 +708,7 @@ def chat():
         user_sessions[chat_id]["messages"].append(user_msg_obj)
         user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
         save_db()
-        
+
         return jsonify({
             "response": bot_response, 
             "sessions": user_sessions, 
@@ -715,4 +732,3 @@ def terms_of_service():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
-
