@@ -307,7 +307,7 @@ CHAT_HTML_TEMPLATE = """
                 <button onclick="removeAttachedImage()" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 14px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="chat-input-box" id="chatInputBox">
-                <textarea id="userInput" placeholder="Hỏi AI Khang Phan hoặc dán ảnh (Ctrl + V)..." rows="1" onkeydown="checkEnter(event)"></textarea>
+                <textarea id="userInput" placeholder="Hỏi AI Khang Phan..." rows="1" onkeydown="checkEnter(event)"></textarea>
                 <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
@@ -506,7 +506,7 @@ CHAT_HTML_TEMPLATE = """
 
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
-            botMsg.innerHTML = "Đang xử lý ảnh và suy nghĩ... 💭";
+            botMsg.innerHTML = "Đang suy nghĩ... 💭";
             chatMessages.appendChild(botMsg);
 
             try {
