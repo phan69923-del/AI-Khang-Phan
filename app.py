@@ -691,7 +691,13 @@ def chat():
         user_sessions[chat_id]["messages"].append(user_msg_obj)
         user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
         save_db()
-
+        
+        return jsonify({
+            "response": bot_response, 
+            "sessions": user_sessions, 
+            "searched": is_searched,
+            "queries": search_queries
+        })
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
