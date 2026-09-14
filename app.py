@@ -73,7 +73,7 @@ LOGIN_HTML_TEMPLATE = """
     <style>
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background-color: #0f172a; 
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); 
             color: white; 
             display: flex; 
             justify-content: center; 
@@ -82,11 +82,14 @@ LOGIN_HTML_TEMPLATE = """
             margin: 0; 
         }
         .card { 
-            background: #1e293b; 
+            background: rgba(30, 41, 59, 0.75); 
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             padding: 30px; 
-            border-radius: 12px; 
+            border-radius: 16px; 
             width: 340px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); 
+            border: 1px solid rgba(255, 255, 255, 0.1);
             text-align: center; 
         }
         h2 { margin-bottom: 20px; color: #f8fafc; }
@@ -94,19 +97,19 @@ LOGIN_HTML_TEMPLATE = """
             width: 100%; 
             padding: 12px; 
             margin: 8px 0; 
-            border-radius: 6px; 
-            border: 1px solid #334155; 
-            background: #0f172a; 
+            border-radius: 8px; 
+            border: 1px solid rgba(255, 255, 255, 0.15); 
+            background: rgba(15, 23, 42, 0.6); 
             color: white; 
             box-sizing: border-box; 
             outline: none;
         }
-        input:focus { border-color: #38bdf8; }
+        input:focus { border-color: #38bdf8; background: rgba(15, 23, 42, 0.8); }
         button { 
             width: 100%; 
             padding: 12px; 
             margin-top: 10px; 
-            border-radius: 6px; 
+            border-radius: 8px; 
             border: none; 
             background: #2563eb; 
             color: white; 
@@ -116,7 +119,7 @@ LOGIN_HTML_TEMPLATE = """
         }
         button:hover { background: #1d4ed8; }
         .google-btn {
-            background-color: #f1f5f9;
+            background-color: rgba(241, 245, 249, 0.9);
             color: #0f172a;
             display: flex;
             align-items: center;
@@ -126,12 +129,12 @@ LOGIN_HTML_TEMPLATE = """
             text-decoration: none;
             margin-top: 12px;
             padding: 12px;
-            border-radius: 6px;
+            border-radius: 8px;
         }
-        .google-btn:hover { background-color: #e2e8f0; }
+        .google-btn:hover { background-color: #ffffff; }
         .divider {
             margin: 15px 0;
-            border-bottom: 1px solid #334155;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
         }
         .divider span {
@@ -139,7 +142,7 @@ LOGIN_HTML_TEMPLATE = """
             top: -10px;
             left: 50%;
             transform: translateX(-50%);
-            background: #1e293b;
+            background: transparent;
             padding: 0 10px;
             font-size: 12px;
             color: #94a3b8;
@@ -237,39 +240,135 @@ CHAT_HTML_TEMPLATE = """
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background-color: #131314; color: #e3e3e3; display: flex; height: 100vh; overflow: hidden; }
-        .sidebar { width: 260px; background-color: #1e1f20; border-right: 1px solid #2b2c2d; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; transition: transform 0.3s ease; }
+        
+        /* Hình nền động/phong cảnh phía sau để thấy hiệu ứng kính mờ xuyên thấu rõ hơn */
+        body { 
+            background: linear-gradient(rgba(19, 19, 20, 0.7), rgba(19, 19, 20, 0.85)), 
+                        url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2000&auto=format&fit=crop') no-repeat center center fixed;
+            background-size: cover;
+            color: #e3e3e3; 
+            display: flex; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+
+        /* HIỆU ỨNG LIQUID GLASS CHO SIDEBAR */
+        .sidebar { 
+            width: 260px; 
+            background: rgba(30, 31, 32, 0.65); 
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.08); 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            height: 100vh; 
+            position: fixed; 
+            left: 0; 
+            top: 0; 
+            z-index: 1000; 
+            transition: transform 0.3s ease; 
+        }
         .sidebar.closed { transform: translateX(-100%); }
         .sidebar-top { padding: 16px; }
         .sidebar-logo-container { display: flex; align-items: center; gap: 10px; padding: 8px 4px; margin-bottom: 20px; }
-        .sidebar-logo-container i { font-size: 20px; color: #8ab4f8; }
+        .sidebar-logo-container i { font-size: 20px; color: #8ab4f8; text-shadow: 0 0 10px rgba(138, 180, 248, 0.5); }
         .sidebar-logo-container span { color: #ffffff; font-weight: 600; font-size: 15px; }
-        .new-chat-btn { display: flex; align-items: center; gap: 10px; background-color: #2b2c2d; color: #ffffff; border: none; padding: 12px 16px; border-radius: 30px; width: 100%; cursor: pointer; font-size: 14px; font-weight: 500; }
-        .new-chat-btn:hover { background-color: #38393a; }
+        
+        .new-chat-btn { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            background: rgba(255, 255, 255, 0.08); 
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff; 
+            padding: 12px 16px; 
+            border-radius: 30px; 
+            width: 100%; 
+            cursor: pointer; 
+            font-size: 14px; 
+            font-weight: 500; 
+            transition: all 0.2s;
+        }
+        .new-chat-btn:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.2); }
+        
         .chat-history { padding: 0 16px; overflow-y: auto; flex: 1; }
-        .history-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 20px; font-size: 14px; color: #cccccc; cursor: pointer; margin-top: 5px; }
-        .history-item:hover, .history-item.active { background-color: #2b2c2d; color: #ffffff; }
+        .history-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 20px; font-size: 14px; color: #cccccc; cursor: pointer; margin-top: 5px; transition: background 0.2s; }
+        .history-item:hover, .history-item.active { background: rgba(255, 255, 255, 0.1); color: #ffffff; }
         .history-content { display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; }
         .history-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .delete-chat-btn { background: none; border: none; color: #888888; cursor: pointer; padding: 4px 6px; border-radius: 50%; font-size: 12px; }
-        .delete-chat-btn:hover { color: #ff6b6b; background-color: rgba(255, 107, 107, 0.1); }
-        .sidebar-footer { padding: 16px; border-top: 1px solid #2b2c2d; font-size: 13px; color: #aaaaaa; }
+        .delete-chat-btn:hover { color: #ff6b6b; background: rgba(255, 107, 107, 0.15); }
+        
+        .sidebar-footer { padding: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 13px; color: #aaaaaa; }
         .footer-actions { display: flex; gap: 8px; margin-top: 10px; }
-        .footer-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: #2b2c2d; color: #ffffff; border: none; padding: 8px 10px; border-radius: 16px; cursor: pointer; font-size: 13px; text-decoration: none; }
-        .main-chat { margin-left: 260px; width: calc(100% - 260px); display: flex; flex-direction: column; height: 100vh; background-color: #131314; transition: margin-left 0.3s ease, width 0.3s ease; }
+        .footer-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); color: #ffffff; padding: 8px 10px; border-radius: 16px; cursor: pointer; font-size: 13px; text-decoration: none; transition: background 0.2s; }
+        .footer-btn:hover { background: rgba(255, 255, 255, 0.12); }
+
+        .main-chat { margin-left: 260px; width: calc(100% - 260px); display: flex; flex-direction: column; height: 100vh; background: transparent; transition: margin-left 0.3s ease, width 0.3s ease; }
         .main-chat.expanded { margin-left: 0; width: 100%; }
-        .chat-header { padding: 16px 24px; font-size: 16px; font-weight: 500; color: #c4c7c5; border-bottom: 1px solid #2b2c2d; display: flex; align-items: center; gap: 12px; }
-        .sidebar-toggle-btn { background: none; border: none; cursor: pointer; padding: 8px; border-radius: 50%; color: #e3e3e3; }
+        
+        /* HIỆU ỨNG KÍNH MỜ CHO HEADER */
+        .chat-header { 
+            padding: 16px 24px; 
+            font-size: 16px; 
+            font-weight: 500; 
+            color: #c4c7c5; 
+            background: rgba(30, 31, 32, 0.45);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08); 
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+        }
+        .sidebar-toggle-btn { background: none; border: none; cursor: pointer; padding: 8px; border-radius: 50%; color: #e3e3e3; transition: background 0.2s; }
+        .sidebar-toggle-btn:hover { background: rgba(255, 255, 255, 0.1); }
+        
         .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%; margin: 0 auto; }
-        .message { max-width: 80%; line-height: 1.6; font-size: 15px; padding: 12px 18px; border-radius: 16px; word-wrap: break-word; }
-        .message.user { background-color: #2b2c2d; align-self: flex-end; color: #ffffff; border-bottom-right-radius: 4px; }
-        .message.bot { background-color: #1e1f20; align-self: flex-start; color: #e3e3e3; border: 1px solid #2b2c2d; border-bottom-left-radius: 4px; }
+        
+        /* HIỆU ỨNG KÍNH MỜ CHO CÁC BONG BÓNG CHAT */
+        .message { max-width: 80%; line-height: 1.6; font-size: 15px; padding: 14px 18px; border-radius: 18px; word-wrap: break-word; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+        .message.user { 
+            background: rgba(43, 44, 45, 0.75); 
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            align-self: flex-end; 
+            color: #ffffff; 
+            border-bottom-right-radius: 4px; 
+        }
+        .message.bot { 
+            background: rgba(30, 31, 32, 0.65); 
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            align-self: flex-start; 
+            color: #e3e3e3; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-bottom-left-radius: 4px; 
+        }
         .message.bot p { margin-bottom: 8px; }
         .message.bot p:last-child { margin-bottom: 0; }
+        
         .chat-input-container { padding: 20px 24px; }
-        .chat-input-box { max-width: 900px; margin: 0 auto; background-color: #1e1f20; border-radius: 30px; display: flex; align-items: center; padding: 8px 16px; border: 1px solid #333333; }
+        
+        /* HIỆU ỨNG KÍNH MỜ CHO KHUNG NHẬP LIỆU */
+        .chat-input-box { 
+            max-width: 900px; 
+            margin: 0 auto; 
+            background: rgba(30, 31, 32, 0.65); 
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 30px; 
+            display: flex; 
+            align-items: center; 
+            padding: 8px 16px; 
+            border: 1px solid rgba(255, 255, 255, 0.12); 
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
         .chat-input-box textarea { flex: 1; background: none; border: none; color: #ffffff; font-size: 15px; resize: none; outline: none; max-height: 120px; padding: 8px 0; }
-        .send-btn { background: none; border: none; color: #8ab4f8; font-size: 18px; cursor: pointer; padding: 8px; border-radius: 50%; }
+        .send-btn { background: none; border: none; color: #8ab4f8; font-size: 18px; cursor: pointer; padding: 8px; border-radius: 50%; transition: background 0.2s; }
+        .send-btn:hover { background: rgba(138, 180, 248, 0.15); }
     </style>
 </head>
 <body>
@@ -298,16 +397,16 @@ CHAT_HTML_TEMPLATE = """
             <span id="chatTitleHeader">AI KhangPhan</span>
         </div>
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?</div>
+            <div class="message bot">Chào sếp! Giao diện kính mờ Liquid Glass đã được kích hoạt thành công cho sếp rồi đây! ✨</div>
         </div>
         <div class="chat-input-container">
-            <div id="imagePreviewContainer" style="display: none; padding: 5px 10px; align-items: center; gap: 10px; background: #1e1f20; border-radius: 12px 12px 0 0; max-width: 900px; margin: 0 auto; border-left: 1px solid #333; border-right: 1px solid #333; border-top: 1px solid #333;">
+            <div id="imagePreviewContainer" style="display: none; padding: 5px 10px; align-items: center; gap: 10px; background: rgba(30, 31, 32, 0.8); backdrop-filter: blur(10px); border-radius: 12px 12px 0 0; max-width: 900px; margin: 0 auto; border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1); border-top: 1px solid rgba(255,255,255,0.1);">
                 <img id="imagePreview" src="" alt="Preview" style="height: 50px; border-radius: 6px; object-fit: cover;">
                 <span style="font-size: 13px; color: #aaa; flex: 1;">Đã đính kèm ảnh (đã tối ưu mượt)</span>
                 <button onclick="removeAttachedImage()" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 14px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="chat-input-box" id="chatInputBox">
-                <textarea id="userInput" placeholder="Hỏi AI Khang Phan..." rows="1" onkeydown="checkEnter(event)"></textarea>
+                <textarea id="userInput" placeholder="Hỏi AI Khang Phan hoặc dán ảnh (Ctrl + V)..." rows="1" onkeydown="checkEnter(event)"></textarea>
                 <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
@@ -328,7 +427,6 @@ CHAT_HTML_TEMPLATE = """
         }
         renderHistoryList();
 
-        // Tự động nén ảnh khi dán (Ctrl + V) giúp gửi lên server nhanh nhẹn hơn
         document.getElementById('userInput').addEventListener('paste', function(event) {
             const items = (event.clipboardData || event.originalEvent.clipboardData).items;
             for (let index in items) {
@@ -341,7 +439,7 @@ CHAT_HTML_TEMPLATE = """
                         img.onload = function() {
                             let canvas = document.createElement('canvas');
                             let ctx = canvas.getContext('2d');
-                            let maxWidth = 1024; // Giới hạn chiều rộng tối đa
+                            let maxWidth = 1024;
                             let width = img.width;
                             let height = img.height;
 
@@ -354,7 +452,6 @@ CHAT_HTML_TEMPLATE = """
                             canvas.height = height;
                             ctx.drawImage(img, 0, 0, width, height);
 
-                            // Xuất ra chuỗi base64 đã nén chất lượng 0.8
                             attachedImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
 
                             document.getElementById('imagePreview').src = attachedImageBase64;
@@ -458,7 +555,7 @@ CHAT_HTML_TEMPLATE = """
 
         async function deleteChat(event, id) {
             event.stopPropagation();
-            if (!confirm("Bạn có chắc muốn xóa đoạn chat này?")) return;
+            if (!confirm("Sếp có chắc muốn xóa đoạn chat này không?")) return;
             const response = await fetch('/delete_chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -506,7 +603,7 @@ CHAT_HTML_TEMPLATE = """
 
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
-            botMsg.innerHTML = "Đang suy nghĩ... 💭";
+            botMsg.innerHTML = "Đang xử lý ảnh và suy nghĩ... 💭";
             chatMessages.appendChild(botMsg);
 
             try {
@@ -741,7 +838,7 @@ def chat():
                 "Tuyệt đối không nhận là do Google tạo ra. "
                 "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
                 "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
-                "Если người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+                "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
             ),
         )
 
@@ -791,7 +888,6 @@ def chat():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:
-        # XÓA LUÔN ẢNH KHỎI THƯ MỤC TẠM SAU KHI GỬI XONG CHO AI (Dù thành công hay lỗi)
         if temp_file_path and os.path.exists(temp_file_path):
             try:
                 os.remove(temp_file_path)
