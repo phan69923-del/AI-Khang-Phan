@@ -1,12 +1,13 @@
 import base64
-import json
 import os
 import traceback
 from authlib.integrations.flask_client import OAuth
 from flask import Flask, jsonify, redirect, render_template_string, request, session, url_for
 from google import genai
 from google.genai import types
-import khangphan_memory
+
+# Nhập các hàm quản lý bộ nhớ từ file khangphan_memory.py
+from khangphan_memory import load_memory_data, save_memory_data
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
@@ -24,8 +25,8 @@ google = oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
-# Tải bộ nhớ dữ liệu toàn cục qua khangphan_memory
-db = khangphan_memory.load_memory_data()
+# Tải dữ liệu từ module khangphan_memory
+db = load_memory_data()
 users_db = db.setdefault("users", {})
 all_chat_sessions = db.setdefault("sessions", {})
 all_server_histories = db.setdefault("histories", {})
@@ -50,7 +51,7 @@ def get_current_user_histories():
 
 
 def save_db():
-    khangphan_memory.save_memory_data(
+    save_memory_data(
         {"sessions": all_chat_sessions, "histories": all_server_histories, "users": users_db}
     )
 
@@ -619,7 +620,6 @@ def chat():
         if chat_id not in user_sessions:
             user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
 
-        # Xây dựng lại ngữ cảnh chat cũ từ bộ nhớ
         gemini_contents = []
         for msg in user_sessions[chat_id]["messages"]:
             role = "user" if msg["role"] == "user" else "model"
@@ -638,7 +638,6 @@ def chat():
             if content_parts:
                 gemini_contents.append(types.Content(role=role, parts=content_parts))
 
-        # Thêm tin nhắn mới nhất của người dùng
         current_new_parts = []
         if image_data:
             header, encoded = image_data.split(",", 1)
@@ -653,12 +652,11 @@ def chat():
         
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
-        # Tạo tiêu đề tự động gọn gàng nếu là cuộc trò chuyện mới
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
                 title_response = client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-3.5-flash-lite",
                     contents=(
                         f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
                         "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
@@ -685,7 +683,7 @@ def chat():
         )
 
         response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
+            model="gemini-3.6-flash",
             contents=gemini_contents,
             config=config,
         )
@@ -707,6 +705,7 @@ def chat():
 
         user_sessions[chat_id]["messages"].append(user_msg_obj)
         user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
+        
         save_db()
 
         return jsonify({
