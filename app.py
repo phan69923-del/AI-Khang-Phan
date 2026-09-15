@@ -379,7 +379,7 @@ CHAT_HTML_TEMPLATE = """
         </div>
         <div class="chat-history" id="chatHistory"></div>
         <div class="sidebar-footer">
-            <div>Khang Phan WorkSpace</div>
+            <div>Khang Phan WorkSpace ✨</div>
             <div class="footer-actions">
                 <a href="/logout" class="footer-btn"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</a>
             </div>
@@ -392,7 +392,7 @@ CHAT_HTML_TEMPLATE = """
             <span id="chatTitleHeader">AI KhangPhan</span>
         </div>
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Chào bạn, tôi có thể giúp gì cho bạn?✨</div>
+            <div class="message bot">Chào bạn, tôi có thể giúp gì cho bạn?</div>
         </div>
         <div class="chat-input-container">
             <div id="imagePreviewContainer" style="display: none; padding: 5px 10px; align-items: center; gap: 10px; background: rgba(30, 31, 32, 0.9); backdrop-filter: blur(10px); border-radius: 12px 12px 0 0; max-width: 900px; margin: 0 auto; border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1); border-top: 1px solid rgba(255,255,255,0.1);">
@@ -401,7 +401,7 @@ CHAT_HTML_TEMPLATE = """
                 <button onclick="removeAttachedImage()" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 14px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="chat-input-box" id="chatInputBox">
-                <textarea id="userInput" placeholder="Hỏi AI Khang Phan hoặc dán ảnh (Ctrl + V)..." rows="1" onkeydown="checkEnter(event)"></textarea>
+                <textarea id="userInput" placeholder="Hỏi AI Khang Phan ..." rows="1" onkeydown="checkEnter(event)"></textarea>
                 <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
@@ -598,7 +598,7 @@ CHAT_HTML_TEMPLATE = """
 
             const botMsg = document.createElement('div');
             botMsg.className = 'message bot';
-            botMsg.innerHTML = "Đang xử lý ảnh và suy nghĩ... 💭";
+            botMsg.innerHTML = "Đang suy nghĩ... 💭";
             chatMessages.appendChild(botMsg);
 
             try {
