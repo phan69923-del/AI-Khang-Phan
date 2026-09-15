@@ -358,7 +358,6 @@
             background-color: transparent;
         }
 
-        /* Khu vực hiển thị ảnh xem trước */
         .image-preview-container {
             max-width: 900px;
             margin: 0 auto 8px auto;
@@ -454,6 +453,89 @@
             background-color: var(--hover-bg);
         }
 
+        /* --- STYLE CHO HỘP THOẠI XÓA CHAT GIỐNG GEMINI --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-box {
+            background: var(--bg-sidebar);
+            color: var(--text-main);
+            padding: 24px;
+            border-radius: 24px;
+            width: 440px;
+            max-width: 90%;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-sidebar);
+        }
+
+        .modal-box h3 {
+            margin-top: 0;
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+
+        .modal-box p {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+
+        .modal-box a {
+            color: #8ab4f8;
+            text-decoration: none;
+        }
+        body.light-mode .modal-box a {
+            color: #0b57d0;
+        }
+        .modal-box a:hover {
+            text-decoration: underline;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .modal-actions button {
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s;
+            background: transparent;
+        }
+
+        .btn-cancel {
+            color: var(--text-main);
+        }
+        .btn-cancel:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .btn-delete {
+            color: var(--text-main);
+            background-color: var(--btn-bg);
+        }
+        .btn-delete:hover {
+            background-color: var(--btn-hover);
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -496,7 +578,7 @@
             </button>
         </div>
         
-        <div class="chat-history" id="chatHistory">
+        <div class="chat-history" id="chatHistory"> 
             <!-- Render danh sách chat động -->
         </div>
 
@@ -545,6 +627,18 @@
                 <textarea id="userInput" placeholder="Hỏi AI KhangPhan hoặc dán ảnh (Ctrl + V)..." rows="1" oninput="autoResize(this)" onkeydown="checkEnter(event)"></textarea>
                 
                 <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HỘP THOẠI XÓA CHAT TỰ CHẾ (MODAL) -->
+    <div id="customDeleteModal" class="modal-overlay" style="display: none;">
+        <div class="modal-box">
+            <h3>Bạn muốn xoá cuộc trò chuyện?</h3>
+            <p>Thao tác này sẽ xoá các câu lệnh, câu trả lời và ý kiến phản hồi khỏi Hoạt động của bạn trên ứng dụng, cũng như mọi nội dung bạn đã tạo.</p>
+            <div class="modal-actions">
+                <button id="modalCancelBtn" class="btn-cancel">Huỷ</button>
+                <button id="modalConfirmBtn" class="btn-delete">Xoá</button>
             </div>
         </div>
     </div>
@@ -717,13 +811,46 @@
             }
         }
 
-        function deleteChat(chatId) {
+        // HÀM HIỂN THỊ MODAL XÓA CHAT MƯỢT MÀ
+        function showCustomDeleteModal() {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('customDeleteModal');
+                const cancelBtn = document.getElementById('modalCancelBtn');
+                const confirmBtn = document.getElementById('modalConfirmBtn');
+
+                modal.style.display = 'flex';
+
+                const handleCancel = () => {
+                    modal.style.display = 'none';
+                    cleanup();
+                    resolve(false);
+                };
+
+                const handleConfirm = () => {
+                    modal.style.display = 'none';
+                    cleanup();
+                    resolve(true);
+                };
+
+                const cleanup = () => {
+                    cancelBtn.removeEventListener('click', handleCancel);
+                    confirmBtn.removeEventListener('click', handleConfirm);
+                };
+
+                cancelBtn.addEventListener('click', handleCancel);
+                confirmBtn.addEventListener('click', handleConfirm);
+            });
+        }
+
+        async function deleteChat(chatId) {
             if (Object.keys(sessions).length <= 1) {
                 alert("Bạn phải giữ lại ít nhất một cuộc trò chuyện!");
                 return;
             }
 
-            if (confirm("Bạn có chắc chắn muốn xóa cuộc trò chuyện này không?")) {
+            // Gọi modal tự chế thay vì dùng confirm() mặc định
+            const isConfirmed = await showCustomDeleteModal();
+            if (isConfirmed) {
                 delete sessions[chatId];
                 
                 if (currentChatId === chatId) {
