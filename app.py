@@ -838,26 +838,26 @@ def chat():
         )
 
         # ====== LUỒNG CHAT CHÍNH (CÓ DỰ PHÒNG FALLBACK) ======
-               response = None
+    response = None
+    try:
+        response = client.models.generate_content(
+            model="gemini-3.5-flash-lite",
+            contents=gemini_contents,
+            config=config,
+        )
+        bot_response = response.text
+    except Exception as e_chat_429:
+        print(f"⚠️ gemini-3.5-flash-lite bị lỗi/hết lượt chat, tự động chuyển sang 3.6-flash... Chi tiết: {e_chat_429}")
         try:
             response = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
+                model="gemini-3.6-flash",
                 contents=gemini_contents,
                 config=config,
             )
             bot_response = response.text
-        except Exception as e_chat_429:
-            print(f"⚠️ gemini-3.5-flash-lite bị lỗi/hết lượt chat, tự động chuyển sang 3.6-flash... Chi tiết: {e_chat_429}")
-            try:
-                response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=gemini_contents,
-                    config=config,
-                )
-                bot_response = response.text
-            except Exception as e_all_429:
-                print(f"❌ Cả hai mô hình đều bị quá tải: {e_all_429}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé😓!"
+        except Exception as e_all_429:
+            print(f"❌ Cả hai mô hình đều bị quá tải: {e_all_429}")
+            bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây-1 phút rồi thử lại nhé😓!"
 
 
         bot_response = response.text
