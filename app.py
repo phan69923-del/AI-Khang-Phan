@@ -833,21 +833,31 @@ def chat():
                 "Tuyệt đối không nhận là do Google tạo ra. "
                 "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
                 "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
-                "Если người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+                "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
             ),
         )
 
         # ====== LUỒNG CHAT CHÍNH (CÓ DỰ PHÒNG FALLBACK) ======
-    response = None
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
-            contents=gemini_contents,
-            config=config,
-        )
-        bot_response = response.text
-    except Exception as e_chat_429:
-        print(f"⚠️ gemini-3.5-flash-lite bị lỗi/hết lượt chat, tự động chuyển sang 3.6-flash... Chi tiết: {e_chat_429}")
+        response = None
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=gemini_contents,
+                config=config,
+            )
+            bot_response = response.text
+        except Exception as e_chat_429:
+            print(f"⚠️ gemini-3.5-flash-lite bị lỗi/hết lượt chat, tự động chuyển sang 3.6-flash... Chi tiết: {e_chat_429}")
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=gemini_contents,
+                    config=config,
+                )
+                bot_response = response.text
+            except Exception as e_all_429:
+                print(f"❌ Cả hai mô hình đều bị quá tải: {e_all_429}")
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé😓!"
         try:
             response = client.models.generate_content(
                 model="gemini-3.6-flash",
