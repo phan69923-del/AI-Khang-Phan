@@ -852,6 +852,9 @@ def chat():
                 contents=gemini_contents,
                 config=config,
             )
+            except Exception as e_all_429:
+        print(f"❌ Cả hai mô hình đều bị quá tải: {e_all_429}")
+        bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé😓!"
 
         bot_response = response.text
 
