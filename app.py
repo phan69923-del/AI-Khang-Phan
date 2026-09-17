@@ -6,16 +6,21 @@ from authlib.integrations.flask_client import OAuth
 from flask import Flask, jsonify, redirect, render_template_string, request, session, url_for
 from google import genai
 from google.genai import types
-from pymongo import MongoClient  # Nhớ có import pymongo nhé sếp
+from pymongo import MongoClient
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
+
+# Cấu hình ProxyFix để nhận đúng chuẩn HTTPS trên Render
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # ==================== MONGODB CLOUD CONFIG ====================
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://phan6993_db_user:2sZFFaaM95omFUm0@cluster0.wkha2pq.mongodb.net/?appName=Cluster0")
 
 try:
-    mongo_client = MongoClient(MONGO_URI)
+    # Đã bổ sung tls=True để né triệt để lỗi SSL trên Render
+    mongo_client = MongoClient(MONGO_URI, tls=True, tlsAllowInvalidCertificates=True)
     db = mongo_client["AI_KhangPhan_DB"]
     sessions_col = db["user_sessions"]
     users_col = db["users"]
