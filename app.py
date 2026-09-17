@@ -710,31 +710,24 @@ def register():
     session["user"] = email
     return jsonify({"success": True, "redirect": "/"})
 
-# 1. Route cho nút bấm đăng nhập ban đầu
 @app.route("/login/google")
 def google_login():
-    try:
-        redirect_uri = url_for("google_authorize", _external=True)
-        return google.authorize_redirect(redirect_uri)
-    except Exception as e:
-        print(f"❌ Chi tiết lỗi Google Login: {e}")
-        return f"Lỗi kết nối Google: {e}", 500
+    redirect_uri = url_for("google_authorize", _external=True)
+    return google.authorize_redirect(redirect_uri)
 
-# 2. Route nhận kết quả trả về từ Google (phải khớp Google Console)
+
 @app.route("/login/google/authorize")
 def google_authorize():
-    try:
-        token = google.authorize_access_token()
-        resp = google.get("https://www.googleapis.com/oauth2/v1/userinfo")
-        user_info = resp.json()
-        email = user_info.get("email")
-        if email:
-            if email not in users_db:
-                users_db[email] = "GOOGLE_OAUTH_USER"
-                save_db()
-            session["user"] = email
-    except Exception as e:
-        print(f"❌ Lỗi xác thực Google Authorize: {e}")
+    token = google.authorize_access_token()
+    resp = google.get("https://www.googleapis.com/oauth2/v1/userinfo")
+    user_info = resp.json()
+    email = user_info.get("email")
+    if email:
+        if email not in users_db:
+            users_db[email] = "GOOGLE_OAUTH_USER"
+            save_db()
+        session["user"] = email
+        return redirect(url_for("index"))
     return redirect(url_for("index"))
 
 @app.route("/logout")
