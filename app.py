@@ -38,7 +38,7 @@ google = oauth.register(
 )
 
 # ==================== MONGODB CLOUD CONFIG ====================
-MONGO_URI = os.environ.get("mongodb+srv://phan69923_db_user:<db_password>@cluster0.wkha2pq.mongodb.net/?appName=Cluster0")
+MONGO_URI = os.environ.get("MONGO_URI")
 
 try:
     # Đã bổ sung tls=True để né triệt để lỗi SSL trên Render
