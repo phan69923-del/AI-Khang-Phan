@@ -692,8 +692,7 @@ def register():
     session["user"] = email
     return jsonify({"success": True, "redirect": "/"})
 
-
-@app.route("/login/google")
+@app.route("/login/google/authorize")
 def google_login():
     redirect_uri = url_for("google_authorize", _external=True)
     return google.authorize_redirect(redirect_uri)
