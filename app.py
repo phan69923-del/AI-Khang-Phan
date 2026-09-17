@@ -6,12 +6,22 @@ from authlib.integrations.flask_client import OAuth
 from flask import Flask, jsonify, redirect, render_template_string, request, session, url_for
 from google import genai
 from google.genai import types
-
-# Nhập các hàm quản lý bộ nhớ từ file khangphan_memory.py
-from khangphan_memory import load_memory_data, save_memory_data
+from pymongo import MongoClient  # Nhớ có import pymongo nhé sếp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
+
+# ==================== MONGODB CLOUD CONFIG ====================
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://phan6993_db_user:2sZFFaaM95omFUm0@cluster0.wkha2pq.mongodb.net/?appName=Cluster0")
+
+try:
+    mongo_client = MongoClient(MONGO_URI)
+    db = mongo_client["AI_KhangPhan_DB"]
+    sessions_col = db["user_sessions"]
+    users_col = db["users"]
+    print("✅ Đã kết nối thành công tới MongoDB Cloud!")
+except Exception as e:
+    print(f"❌ Lỗi kết nối MongoDB Cloud: {e}")
 
 # Tạo thư mục tạm lưu ảnh nếu chưa có
 TEMP_UPLOAD_FOLDER = "temp_uploads"
