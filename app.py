@@ -20,7 +20,19 @@ google = oauth.register(
     }
 )
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
+app.secret_key = os.environ.get("SECRET_KEY", "07062014")
+
+# 2. Sau đó mới khởi tạo OAuth với app 👇
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
 
 # Cấu hình ProxyFix để nhận đúng chuẩn HTTPS trên Render
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
