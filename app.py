@@ -9,6 +9,16 @@ from google.genai import types
 from pymongo import MongoClient
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
 
