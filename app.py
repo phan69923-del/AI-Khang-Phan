@@ -692,12 +692,13 @@ def register():
     session["user"] = email
     return jsonify({"success": True, "redirect": "/"})
 
-@app.route("/login/google/authorize")
+# 1. Route cho nút bấm đăng nhập ban đầu
+@app.route("/login/google")
 def google_login():
     redirect_uri = url_for("google_authorize", _external=True)
     return google.authorize_redirect(redirect_uri)
 
-
+# 2. Route nhận kết quả trả về từ Google (phải khớp Google Console)
 @app.route("/login/google/authorize")
 def google_authorize():
     token = google.authorize_access_token()
