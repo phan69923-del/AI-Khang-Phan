@@ -838,7 +838,6 @@ def chat():
         )
 
         # ====== LUỒNG CHAT CHÍNH (CÓ DỰ PHÒNG FALLBACK) ======
-# ====== LUỒNG CHAT CHÍNH (CÓ DỰ PHÒNG FALLBACK) ======
         response = None
         bot_response = ""
 
