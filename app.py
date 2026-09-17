@@ -695,8 +695,12 @@ def register():
 # 1. Route cho nút bấm đăng nhập ban đầu
 @app.route("/login/google")
 def google_login():
-    redirect_uri = url_for("google_authorize", _external=True)
-    return google.authorize_redirect(redirect_uri)
+    try:
+        redirect_uri = url_for("google_authorize", _external=True)
+        return google.authorize_redirect(redirect_uri)
+    except Exception as e:
+        print(f"❌ Chi tiết lỗi Google Login: {e}")
+        return f"Lỗi kết nối Google: {e}", 500
 
 # 2. Route nhận kết quả trả về từ Google (phải khớp Google Console)
 @app.route("/login/google/authorize")
