@@ -15,6 +15,16 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
 # Cấu hình ProxyFix để nhận đúng chuẩn HTTPS trên Render
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+# ==================== KHỞI TẠO OAUTH & GOOGLE CLIENT (ĐẶT Ở ĐÂY LÀ CHUẨN XÁC NHẤT) ====================
+oauth = OAuth(app)
+google = oauth.register(
+    name="google",
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
+
 # ==================== MONGODB CLOUD CONFIG ====================
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://phan6993_db_user:2sZFFaaM95omFUm0@cluster0.wkha2pq.mongodb.net/?appName=Cluster0")
 
@@ -264,14 +274,13 @@ CHAT_HTML_TEMPLATE = """
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         
         body { 
-            background: #131314; /* Đã xóa hình nền, dùng màu nền tối nguyên bản */
+            background: #131314; 
             color: #e3e3e3; 
             display: flex; 
             height: 100vh; 
             overflow: hidden; 
         }
 
-        /* SIDEBAR LIQUID GLASS */
         .sidebar { 
             width: 260px; 
             background: rgba(30, 31, 32, 0.85); 
@@ -325,7 +334,6 @@ CHAT_HTML_TEMPLATE = """
         .footer-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); color: #ffffff; padding: 8px 10px; border-radius: 16px; cursor: pointer; font-size: 13px; text-decoration: none; transition: background 0.2s; }
         .footer-btn:hover { background: rgba(255, 255, 255, 0.12); }
 
-        /* MAIN CHAT AREA */
         .main-chat { margin-left: 260px; width: calc(100% - 260px); display: flex; flex-direction: column; height: 100vh; background: transparent; transition: margin-left 0.3s ease, width 0.3s ease; }
         .main-chat.expanded { margin-left: 0; width: 100%; }
         
@@ -705,18 +713,24 @@ def google_login():
 # 2. Route nhận kết quả trả về từ Google (phải khớp Google Console)
 @app.route("/login/google/authorize")
 def google_authorize():
-    token = google.authorize_access_token()
-    resp = google.get("https://www.googleapis.com/oauth2/v1/userinfo")
-    user_info = resp.json()
-    email = user_info.get("email")
-    if email:
-        if email not in users_db:
-            users_db[email] = "GOOGLE_OAUTH_USER"
-            save_db()
-        session["user"] = email
-        return redirect(url_for("index"))
+    try:
+        token = google.authorize_access_token()
+        resp = google.get("https://www.googleapis.com/oauth2/v1/userinfo")
+        user_info = resp.json()
+        email = user_info.get("email")
+        if email:
+            if email not in users_db:
+                users_db[email] = "GOOGLE_OAUTH_USER"
+                save_db()
+            session["user"] = email
+    except Exception as e:
+        print(f"❌ Lỗi xác thực Google Authorize: {e}")
     return redirect(url_for("index"))
 
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    return redirect(url_for("index"))
 
 @app.route("/logout")
 def logout():
