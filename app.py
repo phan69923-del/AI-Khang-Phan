@@ -40,11 +40,14 @@ google = oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
-# Tải dữ liệu từ module khangphan_memory
-db = load_memory_data()
-users_db = db.setdefault("users", {})
-all_chat_sessions = db.setdefault("sessions", {})
-all_server_histories = db.setdefault("histories", {})
+def load_memory_data():
+    try:
+        # Ví dụ lấy dữ liệu từ MongoDB collection sessions_col
+        data = list(sessions_col.find({}))
+        return data
+    except Exception as e:
+        print(f"Lỗi load memory: {e}")
+        return []
 
 
 def get_current_user_sessions():
