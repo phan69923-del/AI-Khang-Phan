@@ -76,7 +76,6 @@ def get_current_user_sessions():
     if user not in all_chat_sessions:
         all_chat_sessions[user] = {}
     return all_chat_sessions[user]
-    )
 
 
 # ==================== HTML TEMPLATES ====================
