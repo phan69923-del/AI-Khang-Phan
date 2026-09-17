@@ -737,12 +737,6 @@ def logout():
     session.pop("user", None)
     return redirect(url_for("index"))
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("index"))
-
-
 @app.route("/new_chat", methods=["POST"])
 def new_chat():
     user_sessions = get_current_user_sessions()
