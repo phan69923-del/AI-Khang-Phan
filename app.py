@@ -26,6 +26,7 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
+all_chat_sessions = {}
 
 # Tạo thư mục tạm lưu ảnh nếu chưa có
 TEMP_UPLOAD_FOLDER = "temp_uploads"
