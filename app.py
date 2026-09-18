@@ -9,33 +9,6 @@ from google.genai import types
 from pymongo import MongoClient
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "07062014")
-
-# Chỉ giữ lại 1 đoạn này nằm SAU khi app đã được khởi tạo:
-oauth = OAuth(app)
-google = oauth.register(
-    name='google',
-    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={
-        'scope': 'openid email profile'
-    }
-)
-
-# Cấu hình ProxyFix để nhận đúng chuẩn HTTPS trên Render
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-
-# ==================== KHỞI TẠO OAUTH & GOOGLE CLIENT (ĐẶT Ở ĐÂY LÀ CHUẨN XÁC NHẤT) ====================
-oauth = OAuth(app)
-google = oauth.register(
-    name="google",
-    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={"scope": "openid email profile"},
-)
 
 # ==================== MONGODB CLOUD CONFIG ====================
 MONGO_URI = os.environ.get("MONGO_URI")
@@ -50,51 +23,26 @@ try:
 except Exception as e:
     print(f"❌ Lỗi kết nối MongoDB Cloud: {e}")
 
-# ==================== HÀM TẢI & LƯU TRỮ TRÊN CLOUD ====================
-def load_memory_data():
-    """Tải dữ liệu users và sessions từ MongoDB Cloud"""
-    users_db = {}
-    all_chat_sessions = {}
-    
-    try:
-        # Load users
-        for u in users_col.find({}):
-            users_db[u["email"]] = u.get("password")
-            
-        # Load chat sessions
-        for doc in sessions_col.find({}):
-            user = doc.get("user")
-            chat_id = doc.get("chat_id")
-            if user not in all_chat_sessions:
-                all_chat_sessions[user] = {}
-            all_chat_sessions[user][chat_id] = {
-                "title": doc.get("title", "Cuộc trò chuyện mới"),
-                "messages": doc.get("messages", [])
-            }
-    except Exception as e:
-        print(f"⚠️ Lỗi đọc database từ Cloud: {e}")
-        
-    return users_db, all_chat_sessions
 
-users_db, all_chat_sessions = load_memory_data()
+app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
 
-def save_db():
-    """Đồng bộ toàn bộ dữ liệu lên MongoDB Cloud"""
-    try:
-        # Lưu users
-        for email, pwd in users_db.items():
-            users_col.update_one({"email": email}, {"$set": {"email": email, "password": pwd}}, upsert=True)
-            
-        # Lưu sessions
-        for user, chats in all_chat_sessions.items():
-            for chat_id, data in chats.items():
-                sessions_col.update_one(
-                    {"user": user, "chat_id": chat_id},
-                    {"$set": {"user": user, "chat_id": chat_id, "title": data["title"], "messages": data["messages"]}},
-                    upsert=True
-                )
-    except Exception as e:
-        print(f"❌ Lỗi lưu Cloud: {e}")
+# Tạo thư mục tạm lưu ảnh nếu chưa có
+TEMP_UPLOAD_FOLDER = "temp_uploads"
+os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
+
+# Khởi tạo client Gemini API từ biến môi trường
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+# Cấu hình OAuth cho Google lấy từ biến môi trường
+oauth = OAuth(app)
+google = oauth.register(
+    name="google",
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
 
 def get_current_user_sessions():
     user = session.get("user")
@@ -103,6 +51,21 @@ def get_current_user_sessions():
     if user not in all_chat_sessions:
         all_chat_sessions[user] = {}
     return all_chat_sessions[user]
+
+
+def get_current_user_histories():
+    user = session.get("user")
+    if not user:
+        return {}
+    if user not in all_server_histories:
+        all_server_histories[user] = {}
+    return all_server_histories[user]
+
+
+def save_db():
+    save_memory_data(
+        {"sessions": all_chat_sessions, "histories": all_server_histories, "users": users_db}
+    )
 
 
 # ==================== HTML TEMPLATES ====================
@@ -286,13 +249,14 @@ CHAT_HTML_TEMPLATE = """
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         
         body { 
-            background: #131314; 
+            background: #131314; /* Đã xóa hình nền, dùng màu nền tối nguyên bản */
             color: #e3e3e3; 
             display: flex; 
             height: 100vh; 
             overflow: hidden; 
         }
 
+        /* SIDEBAR LIQUID GLASS */
         .sidebar { 
             width: 260px; 
             background: rgba(30, 31, 32, 0.85); 
@@ -346,6 +310,7 @@ CHAT_HTML_TEMPLATE = """
         .footer-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); color: #ffffff; padding: 8px 10px; border-radius: 16px; cursor: pointer; font-size: 13px; text-decoration: none; transition: background 0.2s; }
         .footer-btn:hover { background: rgba(255, 255, 255, 0.12); }
 
+        /* MAIN CHAT AREA */
         .main-chat { margin-left: 260px; width: calc(100% - 260px); display: flex; flex-direction: column; height: 100vh; background: transparent; transition: margin-left 0.3s ease, width 0.3s ease; }
         .main-chat.expanded { margin-left: 0; width: 100%; }
         
@@ -683,7 +648,20 @@ def index():
         return render_template_string(LOGIN_HTML_TEMPLATE)
     user_sessions = get_current_user_sessions()
     return render_template_string(CHAT_HTML_TEMPLATE, sessions=user_sessions)
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.json or {}
+    email = data.get("email")
+    password = data.get("password")
+    if not email or not password:
+        return jsonify({"success": False, "error": "Vui lòng điền đủ thông tin!"}), 400
+    if email in users_db and users_db[email] == password:
+        session["user"] = email
+        return jsonify({"success": True, "redirect": "/"})
     return jsonify({"success": False, "error": "Email hoặc mật khẩu không đúng!"}), 401
+
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -698,6 +676,7 @@ def register():
     save_db()
     session["user"] = email
     return jsonify({"success": True, "redirect": "/"})
+
 
 @app.route("/login/google")
 def google_login():
@@ -719,10 +698,12 @@ def google_authorize():
         return redirect(url_for("index"))
     return redirect(url_for("index"))
 
+
 @app.route("/logout")
 def logout():
-    session.pop("user", None)
+    session.clear()
     return redirect(url_for("index"))
+
 
 @app.route("/new_chat", methods=["POST"])
 def new_chat():
@@ -762,9 +743,6 @@ def chat():
         if not chat_id or (not user_message and not image_data):
             return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
 
-        # ====== KHỞI TẠO CLIENT GEMINI NGAY TỪ ĐẦU ĐỂ TRÁNH LỖI NAMEERROR ======
-        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-
         user_sessions = get_current_user_sessions()
         if chat_id not in user_sessions:
             user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
@@ -803,7 +781,7 @@ def chat():
                     file_ext = "jpg"
                 
                 temp_filename = f"img_{int(time.time() * 1000)}.{file_ext}"
-                temp_file_path = os.path.join("/tmp", temp_filename) # Dùng thư mục /tmp an toàn trên Render
+                temp_file_path = os.path.join(TEMP_UPLOAD_FOLDER, temp_filename)
                 
                 with open(temp_file_path, "wb") as f:
                     f.write(image_bytes)
@@ -819,23 +797,42 @@ def chat():
         
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
-        # ====== TỰ ĐỘNG SINH TIÊU ĐỀ ======
+        # ====== TỰ ĐỘNG SINH TIÊU ĐỀ (CÓ DỰ PHÒNG FALLBACK) ======
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
-                title_response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ."
-                )
+                title_response = None
+                
+                try:
+                    title_response = client.models.generate_content(
+                        model="gemini-3.6-flash",
+                        contents=(
+                            f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
+                            "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
+                        ),
+                    )
+                except Exception as e_title_429:
+                    print(f"⚠️ gemini-3.6-flash bị lỗi/hết lượt đặt tiêu đề, tự động chuyển sang 3.5-flash-lite... Chi tiết: {e_title_429}")
+                    title_response = client.models.generate_content(
+                        model="gemini-3.5-flash-lite",
+                        contents=(
+                            f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
+                            "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
+                        ),
+                    )
+
                 if title_response and title_response.text:
                     new_title = title_response.text.strip().replace('"', "").replace('*', "").replace('#', "")
                     if new_title:
-                        user_sessions[chat_id]["title"] = " ".join(new_title.split()[:5])
+                        words = new_title.split()
+                        if len(words) > 6:
+                            new_title = " ".join(words[:5])
+                        user_sessions[chat_id]["title"] = new_title
             except Exception as e:
-                print(f"Lỗi tạo tiêu đề: {e}")
-                user_sessions[chat_id]["title"] = "Cuộc trò chuyện mới"
+                print(f"Lỗi tạo tiêu đề (cả 2 model đều không chạy được): {e}")
+                user_sessions[chat_id]["title"] = "Cuộc trò chuyện mới (Dự phòng)"
 
-        # ====== CẤU HÌNH HỆ THỐNG TRỢ LÝ KHANGPHAN ======
+        # ====== CẤU HÌNH HỆ THỐNG CHO TRỢ LÝ ẢO KHANGPHAN ======
         config = types.GenerateContentConfig(
             system_instruction=(
                 "Bạn là trợ lý ảo AI KhangPhan. "
@@ -847,32 +844,33 @@ def chat():
             ),
         )
 
-        # ====== LUỒNG CHAT CHÍNH ======
+        # ====== LUỒNG CHAT CHÍNH (CÓ DỰ PHÒNG FALLBACK) ======
         response = None
         bot_response = ""
 
         try:
             response = client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-3.5-flash-lite",
                 contents=gemini_contents,
                 config=config,
             )
             bot_response = response.text
-        except Exception as e_chat:
-            print(f"⚠️ Lỗi gọi mô hình chính, chuyển dự phòng: {e_chat}")
+        except Exception as e_chat_429:
+            print(f"⚠️ gemini-3.5-flash-lite bị lỗi/hết lượt chat, tự động chuyển sang 3.6-flash... Chi tiết: {e_chat_429}")
             try:
                 response = client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-3.8-flash",
                     contents=gemini_contents,
                     config=config,
                 )
                 bot_response = response.text
-            except Exception as e_all:
-                print(f"❌ Lỗi hoàn toàn: {e_all}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận. Sếp đợi 30 giây rồi gửi lại nhé! 😾"
+            except Exception as e_all_429:
+                print(f"❌ Cả hai mô hình đều bị quá tải: {e_all_429}")
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé!😾"
 
         is_searched = False
         search_queries = []
+        
         if response is not None:
             try:
                 if response.candidates and response.candidates[0].grounding_metadata and response.candidates[0].grounding_metadata.web_search_queries:
@@ -905,7 +903,17 @@ def chat():
                 os.remove(temp_file_path)
             except Exception as e:
                 print(f"Lỗi khi xóa file tạm: {e}")
-                
+
+
+@app.route("/privacy")
+def privacy_policy():
+    return "<h1>Chính sách bảo mật AI KhangPhan</h1>"
+
+
+@app.route("/terms")
+def terms_of_service():
+    return "<h1>Điều khoản dịch vụ AI KhangPhan</h1>"
+
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000, debug=True)
