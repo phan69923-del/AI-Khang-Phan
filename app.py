@@ -2,21 +2,20 @@ import os
 import time
 import base64
 import traceback
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, send_from_directory
 from google import genai
 from google.genai import types
 
 app = Flask(__name__)
-app.secret_key = "secret_key"  # Sếp có thể thay đổi key bảo mật tùy ý
+app.secret_key = "secret_key"
 
-# Lấy trực tiếp từ biến môi trường Render và truyền thẳng vào Client
+# Khởi tạo client Gemini đọc trực tiếp từ biến môi trường Render
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
 TEMP_UPLOAD_FOLDER = "temp_uploads"
 os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
 
-# Giả lập cơ sở dữ liệu session tạm thời cho người dùng
 DATABASE_SESSIONS = {}
 
 def get_current_user_sessions():
@@ -26,7 +25,6 @@ def get_current_user_sessions():
     return DATABASE_SESSIONS[user]
 
 def save_db():
-    # Hàm lưu database của sếp (nếu dùng file json hoặc database thực tế)
     pass
 
 def save_memory_data(data=None):
@@ -36,6 +34,10 @@ def save_memory_data(data=None):
     except Exception as e:
         print(f"Lỗi khi lưu bộ nhớ: {e}")
 
+# Định nghĩa route trang chủ tránh lỗi 404
+@app.route("/")
+def index():
+    return send_from_directory(".", "index.html")
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -107,7 +109,7 @@ def chat():
         
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
-        # ====== TỰ ĐỘNG SINH TIÊU ĐỀ (CÓ DỰ PHÒNG FALLBACK) ======
+        # TỰ ĐỘNG SINH TIÊU ĐỀ
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
@@ -122,7 +124,6 @@ def chat():
                         ),
                     )
                 except Exception as e_title_429:
-                    print(f"⚠️ Model chính bị lỗi đặt tiêu đề, chuyển sang flash-lite... Chi tiết: {e_title_429}")
                     title_response = client.models.generate_content(
                         model="gemini-2.5-flash-lite",
                         contents=(
@@ -142,7 +143,7 @@ def chat():
                 print(f"Lỗi tạo tiêu đề: {e}")
                 user_sessions[chat_id]["title"] = "Cuộc trò chuyện mới"
 
-        # ====== CẤU HÌNH HỆ THỐNG CHO TRỢ LÝ ẢO KHANGPHAN ======
+        # CẤU HÌNH TRỢ LÝ ẢO KHANGPHAN
         config = types.GenerateContentConfig(
             system_instruction=(
                 "Bạn là trợ lý ảo AI KhangPhan. "
@@ -154,7 +155,7 @@ def chat():
             ),
         )
 
-        # ====== LUỒNG CHAT CHÍNH (CÓ DỰ PHÒNG FALLBACK) ======
+        # LUỒNG CHAT CHÍNH
         response = None
         bot_response = ""
 
@@ -166,7 +167,6 @@ def chat():
             )
             bot_response = response.text
         except Exception as e_chat_429:
-            print(f"⚠️ Model chính bị lỗi/hết lượt chat, tự động chuyển sang flash-lite... Chi tiết: {e_chat_429}")
             try:
                 response = client.models.generate_content(
                     model="gemini-2.5-flash-lite",
@@ -175,7 +175,6 @@ def chat():
                 )
                 bot_response = response.text
             except Exception as e_all_429:
-                print(f"❌ Cả hai mô hình đều bị quá tải: {e_all_429}")
                 bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé!😾"
 
         is_searched = False
@@ -215,16 +214,13 @@ def chat():
             except Exception as e:
                 print(f"Lỗi khi xóa file tạm: {e}")
 
-
 @app.route("/privacy")
 def privacy_policy():
     return "<h1>Chính sách bảo mật AI KhangPhan</h1>"
 
-
 @app.route("/terms")
 def terms_of_service():
     return "<h1>Điều khoản dịch vụ AI KhangPhan</h1>"
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
