@@ -683,20 +683,7 @@ def index():
         return render_template_string(LOGIN_HTML_TEMPLATE)
     user_sessions = get_current_user_sessions()
     return render_template_string(CHAT_HTML_TEMPLATE, sessions=user_sessions)
-
-
-@app.route("/login", methods=["POST"])
-def login():
-    data = request.json or {}
-    email = data.get("email")
-    password = data.get("password")
-    if not email or not password:
-        return jsonify({"success": False, "error": "Vui lòng điền đủ thông tin!"}), 400
-    if email in users_db and users_db[email] == password:
-        session["user"] = email
-        return jsonify({"success": True, "redirect": "/"})
     return jsonify({"success": False, "error": "Email hoặc mật khẩu không đúng!"}), 401
-
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -775,6 +762,9 @@ def chat():
         if not chat_id or (not user_message and not image_data):
             return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
 
+        # ====== KHỞI TẠO CLIENT GEMINI NGAY TỪ ĐẦU ĐỂ TRÁNH LỖI NAMEERROR ======
+        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
         user_sessions = get_current_user_sessions()
         if chat_id not in user_sessions:
             user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
@@ -813,7 +803,7 @@ def chat():
                     file_ext = "jpg"
                 
                 temp_filename = f"img_{int(time.time() * 1000)}.{file_ext}"
-                temp_file_path = os.path.join(TEMP_UPLOAD_FOLDER, temp_filename)
+                temp_file_path = os.path.join("/tmp", temp_filename) # Dùng thư mục /tmp an toàn trên Render
                 
                 with open(temp_file_path, "wb") as f:
                     f.write(image_bytes)
@@ -829,42 +819,23 @@ def chat():
         
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
-        # ====== TỰ ĐỘNG SINH TIÊU ĐỀ (CÓ DỰ PHÒNG FALLBACK) ======
+        # ====== TỰ ĐỘNG SINH TIÊU ĐỀ ======
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
-                title_response = None
-                
-                try:
-                    title_response = client.models.generate_content(
-                        model="gemini-3.6-flash",
-                        contents=(
-                            f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
-                            "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
-                        ),
-                    )
-                except Exception as e_title_429:
-                    print(f"⚠️ gemini-3.6-flash bị lỗi/hết lượt đặt tiêu đề, tự động chuyển sang 3.5-flash-lite... Chi tiết: {e_title_429}")
-                    title_response = client.models.generate_content(
-                        model="gemini-3.5-flash-lite",
-                        contents=(
-                            f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
-                            "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
-                        ),
-                    )
-
+                title_response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ."
+                )
                 if title_response and title_response.text:
                     new_title = title_response.text.strip().replace('"', "").replace('*', "").replace('#', "")
                     if new_title:
-                        words = new_title.split()
-                        if len(words) > 6:
-                            new_title = " ".join(words[:5])
-                        user_sessions[chat_id]["title"] = new_title
+                        user_sessions[chat_id]["title"] = " ".join(new_title.split()[:5])
             except Exception as e:
-                print(f"Lỗi tạo tiêu đề (cả 2 model đều không chạy được): {e}")
-                user_sessions[chat_id]["title"] = "Cuộc trò chuyện mới (Dự phòng)"
+                print(f"Lỗi tạo tiêu đề: {e}")
+                user_sessions[chat_id]["title"] = "Cuộc trò chuyện mới"
 
-        # ====== CẤU HÌNH HỆ THỐNG CHO TRỢ LÝ ẢO KHANGPHAN ======
+        # ====== CẤU HÌNH HỆ THỐNG TRỢ LÝ KHANGPHAN ======
         config = types.GenerateContentConfig(
             system_instruction=(
                 "Bạn là trợ lý ảo AI KhangPhan. "
@@ -876,7 +847,7 @@ def chat():
             ),
         )
 
-        # ====== LUỒNG CHAT CHÍNH (CÓ DỰ PHÒNG FALLBACK) ======
+        # ====== LUỒNG CHAT CHÍNH ======
         response = None
         bot_response = ""
 
@@ -887,22 +858,21 @@ def chat():
                 config=config,
             )
             bot_response = response.text
-        except Exception as e_chat_429:
-            print(f"⚠️ gemini-3.5-flash-lite bị lỗi/hết lượt chat, tự động chuyển sang 3.6-flash... Chi tiết: {e_chat_429}")
+        except Exception as e_chat:
+            print(f"⚠️ Lỗi gọi mô hình chính, chuyển dự phòng: {e_chat}")
             try:
                 response = client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-3.5-flash-lite",
                     contents=gemini_contents,
                     config=config,
                 )
                 bot_response = response.text
-            except Exception as e_all_429:
-                print(f"❌ Cả hai mô hình đều bị quá tải: {e_all_429}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé!😾"
+            except Exception as e_all:
+                print(f"❌ Lỗi hoàn toàn: {e_all}")
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận. Sếp đợi 30 giây rồi gửi lại nhé! 😾"
 
         is_searched = False
         search_queries = []
-        
         if response is not None:
             try:
                 if response.candidates and response.candidates[0].grounding_metadata and response.candidates[0].grounding_metadata.web_search_queries:
@@ -935,17 +905,3 @@ def chat():
                 os.remove(temp_file_path)
             except Exception as e:
                 print(f"Lỗi khi xóa file tạm: {e}")
-
-
-@app.route("/privacy")
-def privacy_policy():
-    return "<h1>Chính sách bảo mật AI KhangPhan</h1>"
-
-
-@app.route("/terms")
-def terms_of_service():
-    return "<h1>Điều khoản dịch vụ AI KhangPhan</h1>"
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
