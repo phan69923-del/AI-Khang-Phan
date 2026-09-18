@@ -853,7 +853,7 @@ def chat():
 
         try:
             response = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
+                model="gemini-3.8-flash",
                 contents=gemini_contents,
                 config=config,
             )
@@ -862,7 +862,7 @@ def chat():
             print(f"⚠️ Lỗi gọi mô hình chính, chuyển dự phòng: {e_chat}")
             try:
                 response = client.models.generate_content(
-                    model="gemini-3.8-flash",
+                    model="gemini-3.5-flash-lite",
                     contents=gemini_contents,
                     config=config,
                 )
