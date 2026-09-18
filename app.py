@@ -9,8 +9,9 @@ from google.genai import types
 app = Flask(__name__)
 app.secret_key = "secret_key"  # Sếp có thể thay đổi key bảo mật tùy ý
 
-# Khởi tạo client Gemini (đảm bảo biến môi trường GEMINI_API_KEY đã được thiết lập)
-client = genai.Client()
+# Lấy trực tiếp từ biến môi trường Render và truyền thẳng vào Client
+api_key = os.environ.get("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key)
 
 TEMP_UPLOAD_FOLDER = "temp_uploads"
 os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
