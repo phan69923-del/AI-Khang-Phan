@@ -11,3 +11,4 @@ gunicorn==21.2.0
 authlib==1.3.0
 pymongo==4.6.3
 dnspython==2.6.0
+generate_content_stream
