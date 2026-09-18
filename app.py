@@ -23,6 +23,60 @@ try:
 except Exception as e:
     print(f"❌ Lỗi kết nối MongoDB Cloud: {e}")
 
+# ==================== HÀM TẢI & LƯU TRỮ TRÊN CLOUD ====================
+def load_memory_data():
+    """Tải dữ liệu users và sessions từ MongoDB Cloud"""
+    users_db = {}
+    all_chat_sessions = {}
+    
+    try:
+        # Load users
+        for u in users_col.find({}):
+            users_db[u["email"]] = u.get("password")
+            
+        # Load chat sessions
+        for doc in sessions_col.find({}):
+            user = doc.get("user")
+            chat_id = doc.get("chat_id")
+            if user not in all_chat_sessions:
+                all_chat_sessions[user] = {}
+            all_chat_sessions[user][chat_id] = {
+                "title": doc.get("title", "Cuộc trò chuyện mới"),
+                "messages": doc.get("messages", [])
+            }
+    except Exception as e:
+        print(f"⚠️ Lỗi đọc database từ Cloud: {e}")
+        
+    return users_db, all_chat_sessions
+
+users_db, all_chat_sessions = load_memory_data()
+
+def save_db():
+    """Đồng bộ toàn bộ dữ liệu lên MongoDB Cloud"""
+    try:
+        # Lưu users
+        for email, pwd in users_db.items():
+            users_col.update_one({"email": email}, {"$set": {"email": email, "password": pwd}}, upsert=True)
+            
+        # Lưu sessions
+        for user, chats in all_chat_sessions.items():
+            for chat_id, data in chats.items():
+                sessions_col.update_one(
+                    {"user": user, "chat_id": chat_id},
+                    {"$set": {"user": user, "chat_id": chat_id, "title": data["title"], "messages": data["messages"]}},
+                    upsert=True
+                )
+    except Exception as e:
+        print(f"❌ Lỗi lưu Cloud: {e}")
+
+def get_current_user_sessions():
+    user = session.get("user")
+    if not user:
+        return {}
+    if user not in all_chat_sessions:
+        all_chat_sessions[user] = {}
+    return all_chat_sessions[user]
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "07062014")
