@@ -199,7 +199,7 @@ def chat():
                 
                 try:
                     title_response = gemini_client.models.generate_content(
-                        model="gemini-2.5-flash",
+                        model="gemini-3.5-flash",
                         contents=(
                             f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
                             "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
@@ -207,7 +207,7 @@ def chat():
                     )
                 except Exception:
                     title_response = gemini_client.models.generate_content(
-                        model="gemini-2.5-flash-lite",
+                        model="gemini-3.5-flash-lite",
                         contents=(
                             f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
                             "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
@@ -243,7 +243,7 @@ def chat():
 
         try:
             response = gemini_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=gemini_contents,
                 config=config,
             )
@@ -251,7 +251,7 @@ def chat():
         except Exception:
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.5-flash-lite",
                     contents=gemini_contents,
                     config=config,
                 )
