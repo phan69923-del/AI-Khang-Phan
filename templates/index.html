@@ -322,15 +322,16 @@
             margin: 0 auto;
         }
 
-        .message {
-            max-width: 80%;
-            line-height: 1.6;
-            font-size: 15px;
-            padding: 12px 18px;
-            border-radius: 16px;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-        }
+    .message {
+        max-width: 75%;         /* Giới hạn độ rộng tối đa không bị bè ra quá rộng */
+        width: fit-content;     /* Tự co giãn vừa khít theo nội dung bên trong */
+        line-height: 1.6;
+        font-size: 15px;
+        padding: 12px 18px;
+        border-radius: 16px;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+}
 
         .message.user {
             background-color: var(--user-bg);
