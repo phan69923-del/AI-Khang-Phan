@@ -61,6 +61,12 @@ def save_memory_data(data=None):
         pass
     except Exception as e:
         print(f"Lỗi khi lưu bộ nhớ: {e}")
+
+@app.route("/")
+def index():
+    if "user" not in session:
+        return redirect(url_for("login_page"))
+    return render_template("index.html")
         
 @app.route("/login-page")
 def login_page():
@@ -227,7 +233,7 @@ def chat():
                 "Tuyệt đối không nhận là do Google tạo ra. "
                 "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
                 "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
-                "Если người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+                "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
             ),
         )
 
