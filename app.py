@@ -50,29 +50,10 @@ def save_memory_data(data=None):
     except Exception as e:
         print(f"Lỗi khi lưu bộ nhớ: {e}")
         
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        # Lấy dữ liệu sếp vừa nhập từ form login.html
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        # Đã bỏ comment để kích hoạt logic lưu session và chuyển về trang chủ
-        if username and password:
-            session['user'] = username
-            return redirect(url_for('index'))
-            
-    # Nếu là GET hoặc chưa nhập đúng thì trả về trang login.html
-    return render_template('login.html')
-@app.route('/login/google')
-def login_google():
-    # Sếp viết logic chuyển hướng sang Google Login OAuth2 ở đây nhé
-    return "Đang chuyển hướng đến Google đăng nhập..."
+@app.route("/login-page")
+def login_page():
+    return render_template("login.html")
 
-@app.route('/login/google/callback')
-def google_callback():
-    # Xử lý kết quả trả về từ Google sau khi người dùng đăng nhập xong
-    return "Đăng nhập Google thành công!"
 @app.route("/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
@@ -88,18 +69,43 @@ def login():
     
     return jsonify({"success": False, "error": "Tài khoản hoặc mật khẩu không chính xác!"}), 401
 
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.get_json() or {}
+    username = data.get("username") or data.get("email")
+    password = data.get("password")
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
+    if not username or not password:
+        return jsonify({"success": False, "error": "Thiếu thông tin!"}), 400
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    temp_file_path = None
+    if username in users_db:
+        return jsonify({"success": False, "error": "Tài khoản đã tồn tại!"}), 400
+
+    users_db[username] = password
+    session["user"] = username
+    return jsonify({"success": True, "redirect": "/"})
+
+@app.route("/login/google")
+def login_google():
+    redirect_uri = "https://ai-khang-phan.onrender.com/login/google/callback"
+    return google.authorize_redirect(redirect_uri)
+
+@app.route("/login/google/callback")
+def google_callback():
     try:
-        if "user" not in session:
-            session["user"] = "khangphan_admin"
+        token = google.authorize_access_token()
+        resp = google.get("userinfo")
+        user_info = resp.json()
+        session["user"] = user_info.get("email") or user_info.get("name")
+        return redirect("/")
+    except Exception as e:
+        return f"Lỗi xác thực Google: {str(e)}"
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    return redirect(url_for("login_page"))
+
 
         user = session.get("user")
         data = request.json or {}
