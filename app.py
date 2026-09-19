@@ -37,7 +37,7 @@ def save_memory_data(data=None):
 # Định nghĩa route trang chủ tránh lỗi 404
 @app.route("/")
 def index():
-    return send_from_directory(".", "index.html")
+    return send_from_directory("templates", "index.html")
 
 @app.route("/chat", methods=["POST"])
 def chat():
