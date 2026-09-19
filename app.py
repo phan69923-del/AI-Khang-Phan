@@ -12,7 +12,14 @@ from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
 
 # Lấy chuỗi URI trực tiếp từ biến môi trường trên Render
-uri = os.environ.get("MONGO_URI")
+ri = os.environ.get("MONGO_URI")
+mongo_client = MongoClient(
+    uri, 
+    server_api=ServerApi('1'),
+    tlsCAFile=certifi.where(),
+    tls=True,
+    tlsAllowInvalidCertificates=True
+)
 
 # Kết nối MongoDB Atlas (Đã tích hợp certifi để fix lỗi SSL Handshake)
 mongo_client = MongoClient(
