@@ -2,6 +2,7 @@ import os
 import time
 import base64
 import traceback
+import certifi
 from flask import Flask, request, jsonify, session, send_from_directory, redirect, url_for, render_template
 from werkzeug.middleware.proxy_fix import ProxyFix
 from google import genai
@@ -13,8 +14,12 @@ from authlib.integrations.flask_client import OAuth
 # Lấy chuỗi URI trực tiếp từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
 
-# Kết nối MongoDB Atlas
-mongo_client = MongoClient(uri, server_api=ServerApi('1'))
+# Kết nối MongoDB Atlas (Đã thêm certifi để fix triệt để lỗi SSL Handshake)
+mongo_client = MongoClient(
+    uri, 
+    server_api=ServerApi('1'),
+    tlsCAFile=certifi.where()
+)
 
 # Trỏ tới database và các collection lưu dữ liệu
 db = mongo_client["ai_khangphan_db"]
@@ -150,7 +155,7 @@ def login_google():
 def google_callback():
     try:
         token = google.authorize_access_token()
-        # Đã sửa lỗi URL userinfo thành chuẩn tuyệt đối của Google OpenID
+        # Đã chuẩn hóa URL userinfo của Google OpenID
         resp = google.get("https://openidconnect.googleapis.com/v1/userinfo")
         user_info = resp.json()
         email = user_info.get("email") or user_info.get("name")
@@ -285,7 +290,6 @@ def chat():
                 bot_response = response.text
             except Exception as e:
                 print(f"⚠️ Model chính (gemini-3.8-flash) lỗi hoặc quá tải: {e}")
-                # Kích hoạt chế độ hồi máu: Khóa model chính lại trong 60 giây
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
 
