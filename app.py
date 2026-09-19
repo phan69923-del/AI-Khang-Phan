@@ -151,7 +151,7 @@ def login_google():
 @app.route("/login/google/callback")
 def google_callback():
     try:
-        # Bắt buộc có check_state=False để bỏ qua lệch state qua proxy của Render
+        # BẮT BUỘC PHẢI CÓ check_state=False ĐỂ TRỊ DỨT ĐIỂM LỖI CSRF TRÊN PROXY CỦA RENDER
         token = google.authorize_access_token(check_state=False)
         resp = google.get("https://openidconnect.googleapis.com/v1/userinfo")
         user_info = resp.json()
