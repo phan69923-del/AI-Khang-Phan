@@ -108,10 +108,10 @@ def logout():
 
 
 user = session.get("user")
-        data = request.json or {}
-        chat_id = data.get("chat_id")
-        user_message = data.get("message")
-        image_data = data.get("image")
+data = request.json or {}
+chat_id = data.get("chat_id")
+user_message = data.get("message")
+image_data = data.get("image")
 
         if not chat_id or (not user_message and not image_data):
             return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
