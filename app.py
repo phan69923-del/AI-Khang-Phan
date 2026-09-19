@@ -14,7 +14,7 @@ from authlib.integrations.flask_client import OAuth
 # Lấy chuỗi URI trực tiếp từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
 
-# Kết nối MongoDB Atlas (Đã thêm certifi để fix triệt để lỗi SSL Handshake)
+# Kết nối MongoDB Atlas (Đã tích hợp certifi để fix lỗi SSL Handshake)
 mongo_client = MongoClient(
     uri, 
     server_api=ServerApi('1'),
@@ -26,7 +26,7 @@ db = mongo_client["ai_khangphan_db"]
 users_collection = db["users"]          # Lưu tài khoản đăng ký
 sessions_collection = db["chat_sessions"] # Lưu lịch sử tin nhắn của từng user
 
-# Kiểm tra kết nối thử xem có mượt không
+# Kiểm tra kết nối MongoDB
 try:
     mongo_client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
@@ -74,7 +74,6 @@ def get_current_user_sessions():
     if user_data and "sessions" in user_data:
         return user_data["sessions"]
     else:
-        # Khởi tạo phiên chat mặc định ban đầu
         initial_id = f"chat_{int(time.time() * 1000)}"
         default_sessions = {
             initial_id: { 
@@ -128,8 +127,12 @@ def login():
 
     return jsonify({"success": False, "error": "Tài khoản hoặc mật khẩu không chính xác!"}), 401
 
-@app.route("/register", methods=["POST"])
+@app.route("/register", methods=["GET", "POST"])
 def register():
+    # Fix lỗi 405 Method Not Allowed khi truy cập GET trực tiếp vào /register
+    if request.method == "GET":
+        return redirect(url_for("login_page"))
+
     data = request.get_json() or {}
     username = data.get("username") or data.get("email")
     password = data.get("password")
@@ -141,7 +144,6 @@ def register():
     if existing_user:
         return jsonify({"success": False, "error": "Tài khoản đã tồn tại!"}), 400
 
-    # Lưu user mới vào MongoDB
     users_collection.insert_one({"username": username, "password": password})
     session["user"] = username
     return jsonify({"success": True, "redirect": "/"})
@@ -155,12 +157,10 @@ def login_google():
 def google_callback():
     try:
         token = google.authorize_access_token()
-        # Đã chuẩn hóa URL userinfo của Google OpenID
         resp = google.get("https://openidconnect.googleapis.com/v1/userinfo")
         user_info = resp.json()
         email = user_info.get("email") or user_info.get("name")
         
-        # Đảm bảo user đăng nhập Google cũng được ghi nhận vào MongoDB
         if not users_collection.find_one({"username": email}):
             users_collection.insert_one({"username": email, "auth_type": "google"})
             
@@ -276,12 +276,10 @@ def chat():
         bot_response = ""
         current_time = time.time()
         
-        # KIỂM TRA XEM MODEL CHÍNH CÓ ĐANG TRONG THỜI GIAN "HỒI MÁU" KHÔNG
         is_main_locked = current_time < gemini_main_locked_until
 
         if not is_main_locked:
             try:
-                # 1. GỌI MODEL CHÍNH (gemini-3.8-flash)
                 response = gemini_client.models.generate_content(
                     model="gemini-3.8-flash",
                     contents=gemini_contents,
@@ -289,13 +287,11 @@ def chat():
                 )
                 bot_response = response.text
             except Exception as e:
-                print(f"⚠️ Model chính (gemini-3.8-flash) lỗi hoặc quá tải: {e}")
+                print(f"⚠️ Model chính lỗi hoặc quá tải: {e}")
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
 
-        # 2. NẾU MODEL CHÍNH ĐANG KHÓA HOẶC LỖI -> TỰ ĐỘNG CHUYỂN SANG MODEL DỰ PHÒNG
         if is_main_locked:
-            print("🔄 Đang tự động chuyển sang model dự phòng (gemini-3.5-flash-lite)...")
             try:
                 response = gemini_client.models.generate_content(
                     model="gemini-3.5-flash-lite",
@@ -304,8 +300,8 @@ def chat():
                 )
                 bot_response = response.text
             except Exception as e2:
-                print(f"⚠️ Model dự phòng cũng gặp lỗi: {e2}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé!😾"
+                print(f"⚠️ Model dự phòng lỗi: {e2}")
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu. Vui lòng đợi 30 giây rồi thử lại nhé!😾"
 
         is_searched = False
         search_queries = []
@@ -324,7 +320,6 @@ def chat():
         user_sessions[chat_id]["messages"].append(user_msg_obj)
         user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
 
-        # Lưu ngược lại xuống MongoDB Atlas
         save_user_sessions(user_sessions)
 
         return jsonify({
