@@ -49,16 +49,15 @@ def save_memory_data(data=None):
         pass
     except Exception as e:
         print(f"Lỗi khi lưu bộ nhớ: {e}")
+        
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    return render_template('login.html')
 
 @app.route('/logout')
 def logout():
-    # Xóa session hoặc thông tin đăng nhập của người dùng ở đây
-    session.clear() 
-    return redirect(url_for('login')) # Hoặc chuyển hướng về trang login tùy ý sếp
-# Định nghĩa route trang chủ tránh lỗi 404
-@app.route("/")
-def index():
-    return send_from_directory("templates", "index.html")
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route("/chat", methods=["POST"])
 def chat():
