@@ -12,7 +12,7 @@ from pymongo.server_api import ServerApi
 uri = os.environ.get("MONGO_URI")
 
 # Kết nối MongoDB Atlas
-client = MongoClient(uri, server_api=ServerApi('1'))
+mongo_client = MongoClient(uri, server_api=ServerApi('1'))
 
 # Kiểm tra kết nối thử xem có mượt không
 try:
