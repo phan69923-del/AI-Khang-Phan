@@ -7,6 +7,7 @@ from google import genai
 from google.genai import types
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
+from authlib.integrations.flask_client import OAuth
 
 # Lấy chuỗi URI trực tiếp từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
@@ -16,23 +17,35 @@ mongo_client = MongoClient(uri, server_api=ServerApi('1'))
 
 # Kiểm tra kết nối thử xem có mượt không
 try:
-    client.admin.command('ping')
+    mongo_client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(f"Lỗi kết nối MongoDB: {e}")
 
-
 app = Flask(__name__)
 app.secret_key = "secret_key"
 
+# Khởi tạo OAuth cho Google Login
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
+
 # Khởi tạo client Gemini đọc trực tiếp từ biến môi trường Render
 api_key = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key)
+gemini_client = genai.Client(api_key=api_key)
 
 TEMP_UPLOAD_FOLDER = "temp_uploads"
 os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
 
 DATABASE_SESSIONS = {}
+users_db = {}  # Lưu tạm tài khoản đăng ký
 
 def get_current_user_sessions():
     user = session.get("user", "default_user")
@@ -44,7 +57,6 @@ def save_db():
     pass
 
 def save_memory_data(data=None):
-    """Hàm lưu trữ bộ nhớ phụ trợ (tránh lỗi name 'save_memory_data' is not defined)"""
     try:
         pass
     except Exception as e:
@@ -87,7 +99,7 @@ def register():
 
 @app.route("/login/google")
 def login_google():
-    redirect_uri = "https://ai-khang-phan.onrender.com/login/google/callback"
+    redirect_uri = url_for("google_callback", _external=True)
     return google.authorize_redirect(redirect_uri)
 
 @app.route("/login/google/callback")
@@ -106,39 +118,42 @@ def logout():
     session.pop("user", None)
     return redirect(url_for("login_page"))
 
+@app.route("/chat", methods=["POST"])
+def chat():
+    temp_file_path = None
+    try:
+        user = session.get("user")
+        data = request.json or {}
+        chat_id = data.get("chat_id")
+        user_message = data.get("message")
+        image_data = data.get("image")
 
-user = session.get("user")
-data = request.json or {}
-chat_id = data.get("chat_id")
-user_message = data.get("message")
-image_data = data.get("image")
+        if not chat_id or (not user_message and not image_data):
+            return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
 
-if not chat_id or (not user_message and not image_data):
-    return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
-
-user_sessions = get_current_user_sessions()
+        user_sessions = get_current_user_sessions()
         if chat_id not in user_sessions:
             user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
 
-gemini_contents = []
+        gemini_contents = []
         for msg in user_sessions[chat_id]["messages"]:
             role = "user" if msg["role"] == "user" else "model"
             content_parts = []
             
-if "image" in msg and msg["image"]:
-        try:
-            if msg["image"].startswith("data:image"):
-            header, encoded = msg["image"].split(",", 1)
-            mime_type = header.split(";")[0].split(":")[1]
-            image_bytes = base64.b64decode(encoded)
-            content_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
-            except Exception:
-                pass
+            if "image" in msg and msg["image"]:
+                try:
+                    if msg["image"].startswith("data:image"):
+                        header, encoded = msg["image"].split(",", 1)
+                        mime_type = header.split(";")[0].split(":")[1]
+                        image_bytes = base64.b64decode(encoded)
+                        content_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+                except Exception:
+                    pass
 
-if "text" in msg and msg["text"]:
+            if "text" in msg and msg["text"]:
                 content_parts.append(types.Part.from_text(text=msg["text"]))
-            
-if content_parts:
+                
+            if content_parts:
                 gemini_contents.append(types.Content(role=role, parts=content_parts))
 
         current_new_parts = []
@@ -177,15 +192,15 @@ if content_parts:
                 title_response = None
                 
                 try:
-                    title_response = client.models.generate_content(
+                    title_response = gemini_client.models.generate_content(
                         model="gemini-2.5-flash",
                         contents=(
                             f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
                             "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
                         ),
                     )
-                except Exception as e_title_429:
-                    title_response = client.models.generate_content(
+                except Exception:
+                    title_response = gemini_client.models.generate_content(
                         model="gemini-2.5-flash-lite",
                         contents=(
                             f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
@@ -212,7 +227,7 @@ if content_parts:
                 "Tuyệt đối không nhận là do Google tạo ra. "
                 "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
                 "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
-                "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+                "Если người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
             ),
         )
 
@@ -221,21 +236,21 @@ if content_parts:
         bot_response = ""
 
         try:
-            response = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
+            response = gemini_client.models.generate_content(
+                model="gemini-2.5-flash",
                 contents=gemini_contents,
                 config=config,
             )
             bot_response = response.text
-        except Exception as e_chat_429:
+        except Exception:
             try:
-                response = client.models.generate_content(
-                    model="gemini-3.8-flash",
+                response = gemini_client.models.generate_content(
+                    model="gemini-2.5-flash-lite",
                     contents=gemini_contents,
                     config=config,
                 )
                 bot_response = response.text
-            except Exception as e_all_429:
+            except Exception:
                 bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé!😾"
 
         is_searched = False
