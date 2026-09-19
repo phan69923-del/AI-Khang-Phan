@@ -14,7 +14,7 @@ from authlib.integrations.flask_client import OAuth
 # Lấy chuỗi URI từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
 
-# Kết nối MongoDB Atlas (Đã fix SSL và mở rộng 0.0.0.0/0)
+# Kết nối MongoDB Atlas (Đã fix SSL và cấu hình chuẩn)
 mongo_client = MongoClient(
     uri, 
     server_api=ServerApi('1'),
@@ -151,7 +151,7 @@ def login_google():
 @app.route("/login/google/callback")
 def google_callback():
     try:
-        # Đã thêm check_state=False để bỏ qua lỗi lệch session state qua proxy của Render
+        # Bắt buộc có check_state=False để bỏ qua lệch state qua proxy của Render
         token = google.authorize_access_token(check_state=False)
         resp = google.get("https://openidconnect.googleapis.com/v1/userinfo")
         user_info = resp.json()
