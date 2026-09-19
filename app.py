@@ -11,29 +11,20 @@ from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
 
-# Lấy chuỗi URI trực tiếp từ biến môi trường trên Render
+# Lấy chuỗi URI từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
-mongo_client = MongoClient(
-    uri, 
-    server_api=ServerApi('1'),
-    tlsCAFile=certifi.where(),
-    tls=True,
-    tlsAllowInvalidCertificates=True
-)
 
-# Kết nối MongoDB Atlas (Đã tích hợp certifi để fix lỗi SSL Handshake)
+# Kết nối MongoDB Atlas (Đã fix SSL và mở rộng 0.0.0.0/0)
 mongo_client = MongoClient(
     uri, 
     server_api=ServerApi('1'),
     tlsCAFile=certifi.where()
 )
 
-# Trỏ tới database và các collection lưu dữ liệu
 db = mongo_client["ai_khangphan_db"]
-users_collection = db["users"]          # Lưu tài khoản đăng ký
-sessions_collection = db["chat_sessions"] # Lưu lịch sử tin nhắn của từng user
+users_collection = db["users"]          
+sessions_collection = db["chat_sessions"] 
 
-# Kiểm tra kết nối MongoDB
 try:
     mongo_client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
@@ -49,7 +40,7 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# Khởi tạo OAuth cho Google Login
+# Khởi tạo OAuth cho Google Login (Áp dụng Cách 1: Thêm PKCE code_challenge_method)
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -57,7 +48,8 @@ google = oauth.register(
     client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={
-        'scope': 'openid email profile'
+        'scope': 'openid email profile',
+        'code_challenge_method': 'S256'
     }
 )
 
@@ -68,10 +60,8 @@ gemini_client = genai.Client(api_key=api_key)
 TEMP_UPLOAD_FOLDER = "temp_uploads"
 os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
 
-# Biến toàn cục theo dõi thời gian "hồi máu" của model chính (timestamp)
 gemini_main_locked_until = 0
 
-# Lấy hoặc tạo dữ liệu phiên chat của user từ MongoDB
 def get_current_user_sessions():
     username = session.get("user")
     if not username:
@@ -136,7 +126,6 @@ def login():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    # Fix lỗi 405 Method Not Allowed khi truy cập GET trực tiếp vào /register
     if request.method == "GET":
         return redirect(url_for("login_page"))
 
@@ -245,7 +234,6 @@ def chat():
 
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
-        # TỰ ĐỘNG SINH TIÊU ĐỀ
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
@@ -267,7 +255,6 @@ def chat():
                 print(f"Lỗi tạo tiêu đề: {e}")
                 user_sessions[chat_id]["title"] = "Cuộc trò chuyện mới"
 
-        # CẤU HÌNH TRỢ LÝ ẢO KHANGPHAN
         config = types.GenerateContentConfig(
             system_instruction=(
                 "Bạn là trợ lý ảo AI KhangPhan. "
@@ -294,7 +281,7 @@ def chat():
                 )
                 bot_response = response.text
             except Exception as e:
-                print(f"⚠️ Model chính lỗi hoặc quá tải: {e}")
+                print(f"⚠️ Model chính lỗi: {e}")
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
 
@@ -308,7 +295,7 @@ def chat():
                 bot_response = response.text
             except Exception as e2:
                 print(f"⚠️ Model dự phòng lỗi: {e2}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu. Vui lòng đợi 30 giây rồi thử lại nhé!😾"
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận. Vui lòng đợi 30 giây rồi thử lại nhé!😾"
 
         is_searched = False
         search_queries = []
