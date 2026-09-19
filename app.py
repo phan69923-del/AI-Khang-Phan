@@ -64,7 +64,7 @@ def login():
             
     # Nếu là GET hoặc chưa nhập đúng thì trả về trang login.html
     return render_template('login.html')
-    @app.route('/login/google')
+@app.route('/login/google')
 def login_google():
     # Sếp viết logic chuyển hướng sang Google Login OAuth2 ở đây nhé
     return "Đang chuyển hướng đến Google đăng nhập..."
