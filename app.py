@@ -52,6 +52,17 @@ def save_memory_data(data=None):
         
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if request.method == 'POST':
+        # Lấy dữ liệu sếp vừa nhập từ form login.html
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # Đã bỏ comment để kích hoạt logic lưu session và chuyển về trang chủ
+        if username and password:
+            session['user'] = username
+            return redirect(url_for('index'))
+            
+    # Nếu là GET hoặc chưa nhập đúng thì trả về trang login.html
     return render_template('login.html')
 
 @app.route('/logout')
