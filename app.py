@@ -114,7 +114,7 @@ user_message = data.get("message")
 image_data = data.get("image")
 
 if not chat_id or (not user_message and not image_data):
-return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
+    return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
 
         user_sessions = get_current_user_sessions()
         if chat_id not in user_sessions:
