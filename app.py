@@ -40,7 +40,7 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# Khởi tạo OAuth cho Google Login (Áp dụng Cách 1: Thêm PKCE code_challenge_method)
+# Khởi tạo OAuth cho Google Login
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -48,8 +48,7 @@ google = oauth.register(
     client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={
-        'scope': 'openid email profile',
-        'code_challenge_method': 'S256'
+        'scope': 'openid email profile'
     }
 )
 
@@ -152,7 +151,8 @@ def login_google():
 @app.route("/login/google/callback")
 def google_callback():
     try:
-        token = google.authorize_access_token()
+        # Đã thêm check_state=False để bỏ qua lỗi lệch session state qua proxy của Render
+        token = google.authorize_access_token(check_state=False)
         resp = google.get("https://openidconnect.googleapis.com/v1/userinfo")
         user_info = resp.json()
         email = user_info.get("email") or user_info.get("name")
