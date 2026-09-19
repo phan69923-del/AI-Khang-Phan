@@ -107,7 +107,7 @@ def logout():
     return redirect(url_for("login_page"))
 
 
-        user = session.get("user")
+user = session.get("user")
         data = request.json or {}
         chat_id = data.get("chat_id")
         user_message = data.get("message")
