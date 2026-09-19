@@ -161,7 +161,7 @@ def chat():
 
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash-lite",
                 contents=gemini_contents,
                 config=config,
             )
@@ -169,7 +169,7 @@ def chat():
         except Exception as e_chat_429:
             try:
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.8-flash",
                     contents=gemini_contents,
                     config=config,
                 )
