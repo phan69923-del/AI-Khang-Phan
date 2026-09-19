@@ -8,6 +8,7 @@ from google.genai import types
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Lấy chuỗi URI trực tiếp từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
@@ -29,6 +30,7 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "secret_key_khangphan_2026")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Khởi tạo OAuth cho Google Login
 oauth = OAuth(app)
