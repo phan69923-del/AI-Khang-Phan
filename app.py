@@ -3,12 +3,12 @@ import time
 import base64
 import traceback
 from flask import Flask, request, jsonify, session, send_from_directory, redirect, url_for, render_template
+from werkzeug.middleware.proxy_fix import ProxyFix
 from google import genai
 from google.genai import types
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
-from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Lấy chuỗi URI trực tiếp từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
@@ -30,7 +30,12 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "secret_key_khangphan_2026")
+
+# FIX LỖI PROXY VÀ COOKIE TRÊN RENDER
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Khởi tạo OAuth cho Google Login
 oauth = OAuth(app)
@@ -145,7 +150,8 @@ def login_google():
 def google_callback():
     try:
         token = google.authorize_access_token()
-        resp = google.get("userinfo")
+        # Đã sửa lỗi URL userinfo thành chuẩn tuyệt đối của Google OpenID
+        resp = google.get("https://openidconnect.googleapis.com/v1/userinfo")
         user_info = resp.json()
         email = user_info.get("email") or user_info.get("name")
         
@@ -232,7 +238,7 @@ def chat():
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
                 title_response = gemini_client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-3.5-flash-lite",
                     contents=(
                         f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
                         "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
@@ -257,7 +263,7 @@ def chat():
                 "Tuyệt đối không nhận là do Google tạo ra. "
                 "QUY TẮC BẢO MẬT: Mã bí mật là 07062014 hoặc secret_key. "
                 "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân. "
-                "Если người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
+                "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
             ),
         )
 
@@ -270,25 +276,25 @@ def chat():
 
         if not is_main_locked:
             try:
-                # 1. GỌI MODEL CHÍNH (gemini-3.5-flash-lite)
+                # 1. GỌI MODEL CHÍNH (gemini-3.8-flash)
                 response = gemini_client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-3.8-flash",
                     contents=gemini_contents,
                     config=config,
                 )
                 bot_response = response.text
             except Exception as e:
-                print(f"⚠️ Model chính (gemini-3.5-flash-lite) lỗi hoặc quá tải: {e}")
+                print(f"⚠️ Model chính (gemini-3.8-flash) lỗi hoặc quá tải: {e}")
                 # Kích hoạt chế độ hồi máu: Khóa model chính lại trong 60 giây
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
 
         # 2. NẾU MODEL CHÍNH ĐANG KHÓA HOẶC LỖI -> TỰ ĐỘNG CHUYỂN SANG MODEL DỰ PHÒNG
         if is_main_locked:
-            print("🔄 Đang tự động chuyển sang model dự phòng (gemini-3.8-flash)...")
+            print("🔄 Đang tự động chuyển sang model dự phòng (gemini-3.5-flash-lite)...")
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-3.8-flash",
+                    model="gemini-3.5-flash-lite",
                     contents=gemini_contents,
                     config=config,
                 )
