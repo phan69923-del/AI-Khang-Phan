@@ -151,9 +151,17 @@ def login_google():
 @app.route("/login/google/callback")
 def google_callback():
     try:
-        # BẮT BUỘC PHẢI CÓ check_state=False ĐỂ TRỊ DỨT ĐIỂM LỖI CSRF TRÊN PROXY CỦA RENDER
-        token = google.authorize_access_token(check_state=False)
-        resp = google.get("https://openidconnect.googleapis.com/v1/userinfo")
+        code = request.args.get("code")
+        if not code:
+            return "Không tìm thấy mã xác thực từ Google", 400
+        
+        # Dùng fetch_access_token với code để bypass hoàn toàn lỗi mismatching_state của Proxy Render
+        token = google.fetch_access_token(
+            code=code,
+            redirect_uri=url_for("google_callback", _external=True)
+        )
+        
+        resp = google.get("https://openidconnect.googleapis.com/v1/userinfo", token=token)
         user_info = resp.json()
         email = user_info.get("email") or user_info.get("name")
         
