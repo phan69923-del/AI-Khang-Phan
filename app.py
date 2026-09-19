@@ -116,29 +116,29 @@ image_data = data.get("image")
 if not chat_id or (not user_message and not image_data):
     return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
 
-        user_sessions = get_current_user_sessions()
+user_sessions = get_current_user_sessions()
         if chat_id not in user_sessions:
             user_sessions[chat_id] = {"title": "Cuộc trò chuyện mới", "messages": []}
 
-        gemini_contents = []
+gemini_contents = []
         for msg in user_sessions[chat_id]["messages"]:
             role = "user" if msg["role"] == "user" else "model"
             content_parts = []
             
-            if "image" in msg and msg["image"]:
-                try:
-                    if msg["image"].startswith("data:image"):
-                        header, encoded = msg["image"].split(",", 1)
-                        mime_type = header.split(";")[0].split(":")[1]
-                        image_bytes = base64.b64decode(encoded)
-                        content_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
-                except Exception:
-                    pass
+if "image" in msg and msg["image"]:
+        try:
+            if msg["image"].startswith("data:image"):
+            header, encoded = msg["image"].split(",", 1)
+            mime_type = header.split(";")[0].split(":")[1]
+            image_bytes = base64.b64decode(encoded)
+            content_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+            except Exception:
+                pass
 
-            if "text" in msg and msg["text"]:
+if "text" in msg and msg["text"]:
                 content_parts.append(types.Part.from_text(text=msg["text"]))
             
-            if content_parts:
+if content_parts:
                 gemini_contents.append(types.Content(role=role, parts=content_parts))
 
         current_new_parts = []
