@@ -15,6 +15,11 @@ uri = os.environ.get("MONGO_URI")
 # Kết nối MongoDB Atlas
 mongo_client = MongoClient(uri, server_api=ServerApi('1'))
 
+# Trỏ tới database và các collection lưu dữ liệu
+db = mongo_client["ai_khangphan_db"]
+users_collection = db["users"]          # Lưu tài khoản đăng ký
+sessions_collection = db["chat_sessions"] # Lưu lịch sử tin nhắn của từng user
+
 # Kiểm tra kết nối thử xem có mượt không
 try:
     mongo_client.admin.command('ping')
@@ -23,7 +28,7 @@ except Exception as e:
     print(f"Lỗi kết nối MongoDB: {e}")
 
 app = Flask(__name__)
-app.secret_key = "secret_key"
+app.secret_key = os.environ.get("SECRET_KEY", "secret_key_khangphan_2026")
 
 # Khởi tạo OAuth cho Google Login
 oauth = OAuth(app)
@@ -44,30 +49,50 @@ gemini_client = genai.Client(api_key=api_key)
 TEMP_UPLOAD_FOLDER = "temp_uploads"
 os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
 
-DATABASE_SESSIONS = {}
-users_db = {}  # Lưu tạm tài khoản đăng ký
-
+# Lấy hoặc tạo dữ liệu phiên chat của user từ MongoDB
 def get_current_user_sessions():
-    user = session.get("user", "default_user")
-    if user not in DATABASE_SESSIONS:
-        DATABASE_SESSIONS[user] = {}
-    return DATABASE_SESSIONS[user]
+    username = session.get("user")
+    if not username:
+        return {}
+    
+    user_data = sessions_collection.find_one({"username": username})
+    if user_data and "sessions" in user_data:
+        return user_data["sessions"]
+    else:
+        # Khởi tạo phiên chat mặc định ban đầu
+        initial_id = f"chat_{int(time.time() * 1000)}"
+        default_sessions = {
+            initial_id: { 
+                "title": "Lời chào", 
+                "messages": [{"role": "bot", "text": "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?"}] 
+            }
+        }
+        sessions_collection.update_one(
+            {"username": username},
+            {"$set": {"sessions": default_sessions}},
+            upsert=True
+        )
+        return default_sessions
 
-def save_db():
-    pass
-
-def save_memory_data(data=None):
+def save_user_sessions(user_sessions):
+    username = session.get("user")
+    if not username:
+        return
     try:
-        pass
+        sessions_collection.update_one(
+            {"username": username},
+            {"$set": {"sessions": user_sessions}},
+            upsert=True
+        )
     except Exception as e:
-        print(f"Lỗi khi lưu bộ nhớ: {e}")
+        print(f"Lỗi khi lưu lịch sử chat vào MongoDB: {e}")
 
 @app.route("/")
 def index():
     if "user" not in session:
         return redirect(url_for("login_page"))
     return render_template("index.html")
-        
+
 @app.route("/login-page")
 def login_page():
     return render_template("login.html")
@@ -81,10 +106,11 @@ def login():
     if not username or not password:
         return jsonify({"success": False, "error": "Thiếu thông tin đăng nhập!"}), 400
 
-    if username in users_db and users_db[username] == password:
+    user_in_db = users_collection.find_one({"username": username})
+    if user_in_db and user_in_db.get("password") == password:
         session["user"] = username
         return jsonify({"success": True, "redirect": "/"})
-    
+
     return jsonify({"success": False, "error": "Tài khoản hoặc mật khẩu không chính xác!"}), 401
 
 @app.route("/register", methods=["POST"])
@@ -96,10 +122,12 @@ def register():
     if not username or not password:
         return jsonify({"success": False, "error": "Thiếu thông tin!"}), 400
 
-    if username in users_db:
+    existing_user = users_collection.find_one({"username": username})
+    if existing_user:
         return jsonify({"success": False, "error": "Tài khoản đã tồn tại!"}), 400
 
-    users_db[username] = password
+    # Lưu user mới vào MongoDB
+    users_collection.insert_one({"username": username, "password": password})
     session["user"] = username
     return jsonify({"success": True, "redirect": "/"})
 
@@ -114,7 +142,13 @@ def google_callback():
         token = google.authorize_access_token()
         resp = google.get("userinfo")
         user_info = resp.json()
-        session["user"] = user_info.get("email") or user_info.get("name")
+        email = user_info.get("email") or user_info.get("name")
+        
+        # Đảm bảo user đăng nhập Google cũng được ghi nhận vào MongoDB
+        if not users_collection.find_one({"username": email}):
+            users_collection.insert_one({"username": email, "auth_type": "google"})
+            
+        session["user"] = email
         return redirect("/")
     except Exception as e:
         return f"Lỗi xác thực Google: {str(e)}"
@@ -129,6 +163,9 @@ def chat():
     temp_file_path = None
     try:
         user = session.get("user")
+        if not user:
+            return jsonify({"error": "Chưa đăng nhập"}), 401
+
         data = request.json or {}
         chat_id = data.get("chat_id")
         user_message = data.get("message")
@@ -145,7 +182,6 @@ def chat():
         for msg in user_sessions[chat_id]["messages"]:
             role = "user" if msg["role"] == "user" else "model"
             content_parts = []
-            
             if "image" in msg and msg["image"]:
                 try:
                     if msg["image"].startswith("data:image"):
@@ -155,31 +191,25 @@ def chat():
                         content_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
                 except Exception:
                     pass
-
             if "text" in msg and msg["text"]:
                 content_parts.append(types.Part.from_text(text=msg["text"]))
-                
+            
             if content_parts:
                 gemini_contents.append(types.Content(role=role, parts=content_parts))
 
         current_new_parts = []
-        
         if image_data:
             try:
                 header, encoded = image_data.split(",", 1)
                 mime_type = header.split(";")[0].split(":")[1]
                 image_bytes = base64.b64decode(encoded)
-                
                 file_ext = mime_type.split("/")[-1]
                 if file_ext not in ["png", "jpeg", "jpg", "webp"]:
                     file_ext = "jpg"
-                
                 temp_filename = f"img_{int(time.time() * 1000)}.{file_ext}"
                 temp_file_path = os.path.join(TEMP_UPLOAD_FOLDER, temp_filename)
-                
                 with open(temp_file_path, "wb") as f:
                     f.write(image_bytes)
-                
                 current_new_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
             except Exception as e:
                 print(f"Lỗi xử lý ảnh tạm: {e}")
@@ -188,32 +218,20 @@ def chat():
             current_new_parts.append(types.Part.from_text(text=user_message))
         else:
             current_new_parts.append(types.Part.from_text(text="Hãy mô tả hoặc phân tích bức ảnh này giúp tôi."))
-        
+
         gemini_contents.append(types.Content(role="user", parts=current_new_parts))
 
         # TỰ ĐỘNG SINH TIÊU ĐỀ
         if user_sessions[chat_id]["title"] == "Cuộc trò chuyện mới":
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
-                title_response = None
-                
-                try:
-                    title_response = gemini_client.models.generate_content(
-                        model="gemini-3.5-flash",
-                        contents=(
-                            f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
-                            "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
-                        ),
-                    )
-                except Exception:
-                    title_response = gemini_client.models.generate_content(
-                        model="gemini-3.5-flash-lite",
-                        contents=(
-                            f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
-                            "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
-                        ),
-                    )
-
+                title_response = gemini_client.models.generate_content(
+                    model="gemini-3.5-flash-lite",
+                    contents=(
+                        f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
+                        "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
+                    ),
+                )
                 if title_response and title_response.text:
                     new_title = title_response.text.strip().replace('"', "").replace('*', "").replace('#', "")
                     if new_title:
@@ -236,11 +254,9 @@ def chat():
                 "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật, hãy xưng hô là 'cha đẻ', 'sếp'."
             ),
         )
-
-        # LUỒNG CHAT CHÍNH
+        
         response = None
         bot_response = ""
-
         try:
             response = gemini_client.models.generate_content(
                 model="gemini-3.8-flash",
@@ -248,20 +264,12 @@ def chat():
                 config=config,
             )
             bot_response = response.text
-        except Exception:
-            try:
-                response = gemini_client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
-                    contents=gemini_contents,
-                    config=config,
-                )
-                bot_response = response.text
-            except Exception:
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé!😾"
+        except Exception as e:
+            print(f"Lỗi gọi Gemini: {e}")
+            bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận xử lý quá nhiều yêu cầu cùng lúc. Bạn vui lòng đợi AI hồi máu khoảng 30 giây rồi thử lại nhé!😾"
 
         is_searched = False
         search_queries = []
-        
         if response is not None:
             try:
                 if response.candidates and response.candidates[0].grounding_metadata and response.candidates[0].grounding_metadata.web_search_queries:
@@ -273,19 +281,20 @@ def chat():
         user_msg_obj = {"role": "user", "text": user_message if user_message else ""}
         if image_data:
             user_msg_obj["image"] = image_data
-
+            
         user_sessions[chat_id]["messages"].append(user_msg_obj)
         user_sessions[chat_id]["messages"].append({"role": "bot", "text": bot_response})
-        
-        save_memory_data(user_sessions[chat_id])
-        save_db()
+
+        # Lưu ngược lại xuống MongoDB Atlas
+        save_user_sessions(user_sessions)
 
         return jsonify({
-            "response": bot_response, 
-            "sessions": user_sessions, 
+            "response": bot_response,
+            "sessions": user_sessions,
             "searched": is_searched,
             "queries": search_queries
         })
+
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
