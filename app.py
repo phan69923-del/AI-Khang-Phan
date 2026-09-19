@@ -73,6 +73,21 @@ def login_google():
 def google_callback():
     # Xử lý kết quả trả về từ Google sau khi người dùng đăng nhập xong
     return "Đăng nhập Google thành công!"
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json() or {}
+    username = data.get("username") or data.get("email")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"success": False, "error": "Thiếu thông tin đăng nhập!"}), 400
+
+    if username in users_db and users_db[username] == password:
+        session["user"] = username
+        return jsonify({"success": True, "redirect": "/"})
+    
+    return jsonify({"success": False, "error": "Tài khoản hoặc mật khẩu không chính xác!"}), 401
+
 
 @app.route('/logout')
 def logout():
