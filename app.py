@@ -112,8 +112,12 @@ def login_page():
 def register_page():
     return render_template("register.html")
 
-@app.route("/login", methods=["POST"])
+# Cho phép cả GET và POST cho login để tránh lỗi 405 nếu gõ trực tiếp /login
+@app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "GET":
+        return render_template("login.html")
+
     if request.is_json:
         data = request.get_json() or {}
         username = data.get("username") or data.get("email")
@@ -139,7 +143,7 @@ def login():
     
     return render_template("login.html", error="Tài khoản hoặc mật khẩu không chính xác!")
 
-# Cho phép cả GET (hiển thị trang) lẫn POST (xử lý đăng ký) để tránh lỗi 405
+# Cho phép cả GET và POST cho register
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "GET":
@@ -320,7 +324,7 @@ def chat():
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
 
-5        if is_main_locked:
+        if is_main_locked:
             try:
                 response = gemini_client.models.generate_content(
                     model="gemini-3.5-flash-lite",
