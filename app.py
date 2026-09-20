@@ -307,7 +307,7 @@ def chat():
         if not is_main_locked:
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                     contents=gemini_contents,
                     config=config,
                 )
@@ -320,14 +320,14 @@ def chat():
         if is_main_locked:
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.5-flash-lite",
                     contents=gemini_contents,
                     config=config,
                 )
                 bot_response = response.text
             except Exception as e2:
                 print(f"⚠️ Model dự phòng lỗi: {e2}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận. Vui lòng đợi 30 giây rồi thử lại nhé!😾"
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang quá tải. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
 
         is_searched = False
         search_queries = []
