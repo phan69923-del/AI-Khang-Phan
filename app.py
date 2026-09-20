@@ -108,7 +108,6 @@ def index():
 def login_page():
     return render_template("login.html")
 
-# Route hiển thị giao diện trang đăng ký
 @app.route("/register-page")
 def register_page():
     return render_template("register.html")
@@ -140,8 +139,12 @@ def login():
     
     return render_template("login.html", error="Tài khoản hoặc mật khẩu không chính xác!")
 
-@app.route("/register", methods=["POST"])
+# Cho phép cả GET (hiển thị trang) lẫn POST (xử lý đăng ký) để tránh lỗi 405
+@app.route("/register", methods=["GET", "POST"])
 def register():
+    if request.method == "GET":
+        return render_template("register.html")
+
     if request.is_json:
         data = request.get_json() or {}
         username = data.get("username") or data.get("email")
@@ -317,7 +320,7 @@ def chat():
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
 
-        if is_main_locked:
+5        if is_main_locked:
             try:
                 response = gemini_client.models.generate_content(
                     model="gemini-3.5-flash-lite",
@@ -327,7 +330,7 @@ def chat():
                 bot_response = response.text
             except Exception as e2:
                 print(f"⚠️ Model dự phòng lỗi: {e2}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang quá tải. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận. Vui lòng đợi 30 giây rồi thử lại nhé!😾"
 
         is_searched = False
         search_queries = []
