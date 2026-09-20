@@ -109,9 +109,14 @@ def login_page():
 
 @app.route("/login", methods=["POST"])
 def login():
-    data = request.get_json() or {}
-    username = data.get("username") or data.get("email")
-    password = data.get("password")
+    # Hỗ trợ linh hoạt cả JSON lẫn Form-urlencoded để triệt tiêu hoàn toàn lỗi 415
+    if request.is_json:
+        data = request.get_json() or {}
+        username = data.get("username") or data.get("email")
+        password = data.get("password")
+    else:
+        username = request.form.get("username") or request.form.get("email")
+        password = request.form.get("password")
 
     if not username or not password:
         return jsonify({"success": False, "error": "Thiếu thông tin đăng nhập!"}), 400
@@ -128,9 +133,13 @@ def register():
     if request.method == "GET":
         return redirect(url_for("login_page"))
 
-    data = request.get_json() or {}
-    username = data.get("username") or data.get("email")
-    password = data.get("password")
+    if request.is_json:
+        data = request.get_json() or {}
+        username = data.get("username") or data.get("email")
+        password = data.get("password")
+    else:
+        username = request.form.get("username") or request.form.get("email")
+        password = request.form.get("password")
 
     if not username or not password:
         return jsonify({"success": False, "error": "Thiếu thông tin!"}), 400
@@ -155,7 +164,6 @@ def google_callback():
         if not code:
             return "Không tìm thấy mã xác thực từ Google", 400
         
-        # Dùng fetch_access_token với code để bypass hoàn toàn lỗi mismatching_state của Proxy Render
         token = google.fetch_access_token(
             code=code,
             redirect_uri=url_for("google_callback", _external=True)
@@ -246,7 +254,7 @@ def chat():
             try:
                 title_prompt = user_message if user_message else "Phân tích hình ảnh"
                 title_response = gemini_client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-2.5-flash",
                     contents=(
                         f"Nhiệm vụ duy nhất: Đặt tiêu đề tối đa 5 từ cho nội dung: '{title_prompt}'. "
                         "CHỈ TRẢ VỀ ĐÚNG TỪ KHÓA TIÊU ĐỀ, tuyệt đối không viết thêm bất kỳ câu dẫn dắt, giải thích hay dấu sao nào."
@@ -283,7 +291,7 @@ def chat():
         if not is_main_locked:
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-3.8-flash",
+                    model="gemini-2.5-flash",
                     contents=gemini_contents,
                     config=config,
                 )
@@ -296,7 +304,7 @@ def chat():
         if is_main_locked:
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-2.5-flash-lite",
                     contents=gemini_contents,
                     config=config,
                 )
