@@ -39,6 +39,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['JSON_AS_ASCII'] = False  # Hỗ trợ hiển thị tiếng Việt chuẩn trong JSON response
 
 # Khởi tạo OAuth cho Google Login
 oauth = OAuth(app)
@@ -107,9 +108,13 @@ def index():
 def login_page():
     return render_template("login.html")
 
+# Thêm route hiển thị giao diện trang đăng ký (register.html)
+@app.route("/register-page")
+def register_page():
+    return render_template("register.html")
+
 @app.route("/login", methods=["POST"])
 def login():
-    # Hỗ trợ linh hoạt cả JSON lẫn Form-urlencoded để triệt tiêu hoàn toàn lỗi 415
     if request.is_json:
         data = request.get_json() or {}
         username = data.get("username") or data.get("email")
@@ -128,11 +133,9 @@ def login():
 
     return jsonify({"success": False, "error": "Tài khoản hoặc mật khẩu không chính xác!"}), 401
 
-@app.route("/register", methods=["GET", "POST"])
+# Route xử lý dữ liệu đăng ký tài khoản mới từ client gửi lên
+@app.route("/register", methods=["POST"])
 def register():
-    if request.method == "GET":
-        return redirect(url_for("login_page"))
-
     if request.is_json:
         data = request.get_json() or {}
         username = data.get("username") or data.get("email")
@@ -142,11 +145,11 @@ def register():
         password = request.form.get("password")
 
     if not username or not password:
-        return jsonify({"success": False, "error": "Thiếu thông tin!"}), 400
+        return jsonify({"success": False, "error": "Thiếu thông tin đăng ký!"}), 400
 
     existing_user = users_collection.find_one({"username": username})
     if existing_user:
-        return jsonify({"success": False, "error": "Tài khoản đã tồn tại!"}), 400
+        return jsonify({"success": False, "error": "Tài khoản này đã tồn tại!"}), 400
 
     users_collection.insert_one({"username": username, "password": password})
     session["user"] = username
