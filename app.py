@@ -108,7 +108,7 @@ def index():
 def login_page():
     return render_template("login.html")
 
-# Thêm route hiển thị giao diện trang đăng ký (register.html)
+# Route hiển thị giao diện trang đăng ký (Khớp với link /register-page ở login.html)
 @app.route("/register-page")
 def register_page():
     return render_template("register.html")
