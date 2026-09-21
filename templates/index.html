@@ -975,7 +975,7 @@
 
         // Nếu chưa có thời gian, tự động tạo 2 phút để test
         if (!targetTime) {
-            targetTime = new Date().getTime() + (2 * 60 * 1000);  
+            targetTime = new Date().getTime() + (0 * 60 * 1000);  
             localStorage.setItem(bannerCacheKey, targetTime);
         }
 
@@ -995,7 +995,7 @@
                     
                     var countdownEl = document.getElementById('banner-countdown');
                     if (countdownEl) {
-                        countdownEl.innerHTML = (minutes < 5 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+                        countdownEl.innerHTML = (minutes < 0 ? "0" : "") + minutes + ":" + (seconds < 0 ? "0" : "") + seconds;
                     }
                 } else {
                     // Hết giờ trên banner -> Lưu thời gian bảo trì (5 phút) rồi tự sút sang trang bảo trì
