@@ -11,6 +11,7 @@ from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
 from flask import render_template
+
         
 # Lấy chuỗi URI từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
@@ -40,8 +41,14 @@ IS_MAINTENANCE = True
 
 @app.before_request
 def before_request():
-    if IS_MAINTENANCE:
+    # Ngoại trừ trang API kiểm tra bảo trì và file tĩnh, còn lại nếu bật bảo trì sẽ ép về trang maintenance.html
+    if IS_MAINTENANCE and request.endpoint not in ['check_maintenance', 'static']:
         return render_template('maintenance.html')
+
+# API đường dẫn để script ngầm ở index.html gọi hỏi trạng thái bảo trì
+@app.route('/check-maintenance')
+def check_maintenance():
+    return jsonify({"is_maintenance": IS_MAINTENANCE})
 
 # FIX LỖI PROXY VÀ COOKIE TRÊN RENDER
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
