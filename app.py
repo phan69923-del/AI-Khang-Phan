@@ -10,7 +10,17 @@ from google.genai import types
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
+from flask import render_template
 
+# Bật biến này thành True khi muốn đóng web bảo trì
+IS_MAINTENANCE = True 
+
+@app.before_request
+before_request():
+    if IS_MAINTENANCE:
+        # Cho phép truy cập file tĩnh (css/js) nếu cần, hoặc chặn hết
+        return render_template('maintenance.html')
+        
 # Lấy chuỗi URI từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
 
