@@ -552,11 +552,12 @@
     </style>
 </head>
 <body>
-    <!-- ================= BANNER THÔNG BÁO BẢO TRÌ ================= -->
-<div id="maintenance-banner" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; z-index: 99999; background: linear-gradient(90deg, #ff9800, #ff5722); color: white; padding: 10px 20px; text-align: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; font-weight: 500; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
-    ⚠️ <span id="banner-text">Hệ thống chuẩn bị bảo trì... Xin lỗi vì đã làm gián đoạn thời gian của bạn!</span> 
-    (Thời gian còn lại: <strong id="banner-countdown">--:--</strong>)
-</div>
+<!-- ================= BANNER THÔNG BÁO BẢO TRÌ ================= -->
+    <div id="maintenance-banner" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; z-index: 99999; background: linear-gradient(90deg, #ff9800, #ff5722); color: white; padding: 10px 20px; text-align: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; font-weight: 500; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+        ⚠️ <span id="banner-text">Hệ thống chuẩn bị bảo trì... Xin lỗi vì đã làm gián đoạn thời gian của bạn!</span> 
+        (Thời gian còn lại: <strong id="banner-countdown">--:--</strong>)
+    </div>
+
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
     <div class="sidebar" id="sidebar">
@@ -637,6 +638,25 @@
                 <button id="modalCancelBtn" class="btn-cancel">Huỷ</button>
                 <button id="modalConfirmBtn" class="btn-delete">Xoá</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Thông báo bảo trì đột xuất -->
+    <div id="emergency-maintenance-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center;">
+        <div style="background: linear-gradient(135deg, #2a2a40, #1e1e2f); padding: 35px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.18); box-shadow: 0 10px 40px rgba(0,0,0,0.5); text-align: center; max-width: 420px; width: 90%; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+            
+            <!-- Tiêu đề cảnh báo -->
+            <h2 style="color: #ffc107; margin-top: 0; font-size: 22px; margin-bottom: 15px;">⚠️ Hệ thống bảo trì đột xuất</h2>
+            
+            <!-- Nội dung xin lỗi -->
+            <p style="color: #cfd8dc; font-size: 15px; line-height: 1.6; margin-bottom: 25px;">
+                Xin lỗi đã làm phiền! Hệ thống AI_KhangPhan đang tiến hành bảo trì gấp để nâng cấp trải nghiệm tốt hơn. Vui lòng quay lại sau ít phút nhé!
+            </p>
+            
+            <!-- Nút OK -->
+            <button onclick="handleMaintenanceOk()" style="background: #00e676; color: #1e1e2f; border: none; padding: 12px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(0,230,118,0.3);">
+                OK
+            </button>
         </div>
     </div>
 
@@ -930,85 +950,68 @@
             
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
-        <!-- Modal Thông báo bảo trì đột xuất -->
-<div id="emergency-maintenance-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center;">
-    <div style="background: linear-gradient(135deg, #2a2a40, #1e1e2f); padding: 35px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.18); box-shadow: 0 10px 40px rgba(0,0,0,0.5); text-align: center; max-width: 420px; width: 90%; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-        
-        <!-- Tiêu đề cảnh báo -->
-        <h2 style="color: #ffc107; margin-top: 0; font-size: 22px; margin-bottom: 15px;">⚠️ Hệ thống bảo trì đột xuất</h2>
-        
-        <!-- Nội dung xin lỗi -->
-        <p style="color: #cfd8dc; font-size: 15px; line-height: 1.6; margin-bottom: 25px;">
-            Xin lỗi đã làm phiền! Hệ thống AI_KhangPhan đang tiến hành bảo trì gấp để nâng cấp trải nghiệm tốt hơn. Vui lòng quay lại sau ít phút nhé!
-        </p>
-        
-        <!-- Nút OK -->
-        <button onclick="handleMaintenanceOk()" style="background: #00e676; color: #1e1e2f; border: none; padding: 12px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(0,230,118,0.3);">
-            OK
-        </button>
-    </div>
-</div>
 
-<script>
-    // Hàm xử lý khi bấm nút OK
-    function handleMaintenanceOk() {
-        // Có thể cho chuyển hướng về trang bảo trì chính hoặc ẩn popup tùy ý
-        window.location.href = "/maintenance"; // Hoặc ẩn đi: document.getElementById('emergency-maintenance-modal').style.display = 'none';
-    }
+        // ================= LOGIC BẢO TRÌ & ĐẾM NGƯỢC TỰ ĐỘNG =================
 
-    // Kiểm tra ngầm trạng thái từ app.py mỗi 5 giây
-    setInterval(function() {
-        fetch('/check-maintenance')
-            .then(response => response.json())
-            .then(data => {
-                if (data.is_maintenance === true) {
-                    // Hiện popup bảo trì đột xuất lên ngay lập tức
-                    document.getElementById('emergency-maintenance-modal').style.display = 'flex';
+        // 1. Kiểm tra trạng thái bảo trì đột xuất từ server mỗi 5 giây
+        setInterval(function() {
+            fetch('/check-maintenance')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.is_maintenance === true) {
+                        document.getElementById('emergency-maintenance-modal').style.display = 'flex';
+                    }
+                })
+                .catch(error => console.log('Lỗi kiểm tra bảo trì:', error));
+        }, 5000);
+
+        function handleMaintenanceOk() {
+            window.location.href = "/maintenance";
+        }
+
+        // 2. Logic đếm ngược và tự động chuyển sang trang bảo trì khi hết giờ
+        var bannerCacheKey = "maintenance_end_v1";  
+        var targetTime = localStorage.getItem(bannerCacheKey);
+
+        // Nếu chưa có thời gian, tự động tạo 2 phút để test
+        if (!targetTime) {
+            targetTime = new Date().getTime() + (2 * 60 * 1000);  
+            localStorage.setItem(bannerCacheKey, targetTime);
+        }
+
+        if (targetTime) {
+            var bannerInterval = setInterval(function() {
+                var now = new Date().getTime();
+                var distance = targetTime - now;
+
+                if (distance > 0) {
+                    var banner = document.getElementById('maintenance-banner');
+                    if (banner) {
+                        banner.style.display = 'block';
+                    }
+
+                    var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                    var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                    
+                    var countdownEl = document.getElementById('banner-countdown');
+                    if (countdownEl) {
+                        countdownEl.innerHTML = (minutes < 5 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+                    }
+                } else {
+                    // Hết giờ trên banner -> Lưu thời gian bảo trì (5 phút) rồi tự sút sang trang bảo trì
+                    clearInterval(bannerInterval);
+                    localStorage.removeItem(bannerCacheKey);
+                    
+                    var maintenanceDurationMinutes = 5; 
+                    var maintenanceEndTime = new Date().getTime() + (maintenanceDurationMinutes * 60 * 1000);
+                    localStorage.setItem('maintenance_end_time', maintenanceEndTime);
+                    
+                    window.location.href = "/maintenance"; 
                 }
-            })
-            .catch(error => console.log('Lỗi:', error));
-    }, 5000);
-}, 5000);
-</script>
+            }, 1000);
+        }
 
-<script>
-    // Logic đếm ngược cho banner
-    var bannerCacheKey = "maintenance_end_v1"; 
-    var targetTime = localStorage.getItem(bannerCacheKey);
-
-    // Nếu chưa có thời gian, tự động tạo luôn 2 phút để test cho nhanh
-    if (!targetTime) {
-        targetTime = new Date().getTime() + (2 * 60 * 1000); 
-        localStorage.setItem(bannerCacheKey, targetTime);
-    }
-
-    if (targetTime) {
-        var bannerInterval = setInterval(function() {
-            var now = new Date().getTime();
-            var distance = targetTime - now;
-
-            if (distance > 0) {
-                var banner = document.getElementById('maintenance-banner');
-                if (banner) {
-                    banner.style.display = 'block';
-                }
-
-                var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                var seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                
-                var countdownEl = document.getElementById('banner-countdown');
-                if (countdownEl) {
-                    countdownEl.innerHTML = (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
-                }
-            } else {
-                clearInterval(bannerInterval);
-                localStorage.removeItem(bannerCacheKey);
-                window.location.href = "/login"; 
-            }
-        }, 1000);
-    }
-</script>
-
+        // Khởi chạy render danh sách chat ban đầu
         renderSessions(sessions);
     </script>
 </body>
