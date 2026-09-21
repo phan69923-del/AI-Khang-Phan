@@ -35,8 +35,8 @@ except Exception as e:
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "secret_key_khangphan_2026")
 
-# Bật biến này thành False khi muốn đóng web bảo trì, True mở 
-IS_MAINTENANCE = True 
+# Bật biến này thành True khi muốn đóng web bảo trì, Faile mở 
+IS_MAINTENANCE = Faile 
 
 @app.before_request
 def before_request():
