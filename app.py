@@ -12,7 +12,7 @@ from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
 from flask import render_template
 
-# Bật biến này thành True khi muốn đóng web bảo trì
+# Bật biến này thành False khi muốn đóng web bảo trì, True mở 
 IS_MAINTENANCE = True 
 
 @app.before_request
