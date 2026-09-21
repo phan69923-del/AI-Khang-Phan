@@ -16,9 +16,8 @@ from flask import render_template
 IS_MAINTENANCE = True 
 
 @app.before_request
-before_request():
+def before_request():
     if IS_MAINTENANCE:
-        # Cho phép truy cập file tĩnh (css/js) nếu cần, hoặc chặn hết
         return render_template('maintenance.html')
         
 # Lấy chuỗi URI từ biến môi trường trên Render
