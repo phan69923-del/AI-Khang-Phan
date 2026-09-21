@@ -134,6 +134,29 @@ setInterval(function() {
             function pad(number) {
                 return (number < 10 ? "0" : "") + number;
             }
+            var now = new Date().getTime();
+            var distance = countDownDate - now;
+
+            // Nếu thời gian đếm ngược đã chạy về 0 hoặc âm (hết giờ)
+            if (distance < 0) {
+                // Tự động cộng thêm 5 phút (5 * 60 * 1000) vào mốc thời gian mới
+                countDownDate = new Date().getTime() + (5 * 60 * 1000);
+                localStorage.setItem(cacheKey, countDownDate); // Lưu lại mốc mới
+                distance = countDownDate - now;
+                var now = new Date().getTime();
+                var distance = countDownDate - now;
+
+                // Nếu đã chạy hết thời gian đếm ngược
+                if (distance < 0) {
+                clearInterval(x); // Dừng đồng hồ lại
+    
+                // Xóa bộ nhớ cache bảo trì cũ đi để lần sau vào không bị kẹt nữa
+                localStorage.removeItem(cacheKey);
+
+                // Tự động chuyển hướng về trang đăng nhập hoặc trang chính của ông
+                window.location.href = "/login"; // Hoặc đường dẫn trang chính của ông (ví dụ: "/" hoặc "/chat")
+}
+}
 
             // Đẩy dữ liệu ra các ô giao diện
             document.getElementById("days").innerHTML = pad(days);
