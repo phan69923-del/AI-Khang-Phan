@@ -552,6 +552,11 @@
     </style>
 </head>
 <body>
+    <!-- ================= BANNER THÔNG BÁO BẢO TRÌ ================= -->
+<div id="maintenance-banner" style="display: none; background: linear-gradient(90deg, #ff9800, #ff5722); color: white; padding: 10px 20px; text-align: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; font-weight: 500; position: sticky; top: 0; z-index: 99999; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+    ⚠️ <span id="banner-text">Hệ thống chuẩn bị bảo trì... Xin lỗi vì đã làm gián đoạn thời gian của bạn!</span> 
+    (Thời gian còn lại: <strong id="banner-countdown">--:--</strong>)
+</div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
     <div class="sidebar" id="sidebar">
@@ -963,6 +968,31 @@
             })
             .catch(error => console.log('Lỗi:', error));
     }, 5000);
+</script><script>
+    // Logic đếm ngược cho banner
+    var bannerCacheKey = "maintenance_end_v1"; 
+    var targetTime = localStorage.getItem(bannerCacheKey);
+
+    if (targetTime) {
+        var bannerInterval = setInterval(function() {
+            var now = new Date().getTime();
+            var distance = targetTime - now;
+
+            if (distance > 0) {
+                document.getElementById('maintenance-banner').style.display = 'block';
+
+                var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                document.getElementById('banner-countdown').innerHTML = 
+                    (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+            } else {
+                clearInterval(bannerInterval);
+                localStorage.removeItem(bannerCacheKey);
+                window.location.href = "/login"; 
+            }
+        }, 1000);
+    }
 </script>
 
         renderSessions(sessions);
