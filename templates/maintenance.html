@@ -40,7 +40,6 @@
             margin-bottom: 30px;
         }
         
-        /* Giao diện các ô đồng hồ 4 khối */
         #countdown {
             display: flex;
             justify-content: center;
@@ -85,41 +84,22 @@
     </div>
 
     <script>
-        // ========================================================
-        // MẸO: Mỗi lần muốn đổi thời gian bảo trì mới, ông chỉ cần đổi 
-        // chữ "maintenance_end_v2" thành "_v3", "_v4"... ở 2 chỗ dưới đây 
-        // là web tự hiểu và không bị dính cache cũ!
-        // ========================================================
+        // MỖI KHI MUỐN ĐỔI THỜI GIAN MỚI (Ví dụ 10 phút), HÃY TĂNG THÀNH v2, v3... ĐỂ KHÔNG BỊ DÍNH CACHE CŨ
         var cacheKey = "maintenance_end_v1";
         var countDownDate = localStorage.getItem(cacheKey);
         
         if (!countDownDate) {
-            // Đặt thời gian bảo trì (Ví dụ: 30 phút = 30 * 60 * 1000)
-            // Hoặc nếu muốn 2 ngày: ( 10 * 60 * 1000)
+            // Đặt thời gian bảo trì (10 phút = 10 * 60 * 1000)
             countDownDate = new Date().getTime() + (10 * 60 * 1000);
             localStorage.setItem(cacheKey, countDownDate);
         }
-        // --- TỰ ĐỘNG KIỂM TRA VÀ F5 KHI SERVER CÓ THAY ĐỔI ---
-let lastTimeValue = null;
 
-setInterval(function() {
-    fetch('/check-maintenance')
-        .then(response => response.json())
-        .then(data => {
-            if (lastTimeValue === null) {
-                lastTimeValue = data.is_maintenance;
-                return;
-            }
+        // Hàm thêm số 0 đằng trước cho đẹp
+        function pad(number) {
+            return (number < 10 ? "0" : "") + number;
+        }
 
-            // Nếu trạng thái bảo trì trên server thay đổi, tự động F5 ngay
-            if (data.is_maintenance !== lastTimeValue) {
-                console.log("Phát hiện thay đổi từ server, đang tự động tải lại trang...");
-                location.reload(); 
-            }
-        })
-        .catch(error => console.log('Lỗi kết nối kiểm tra:', error));
-}, 5000); // Check mỗi 5 giây
-
+        // Chạy đồng hồ đếm ngược mỗi giây
         var x = setInterval(function() {
             var now = new Date().getTime();
             var distance = countDownDate - now;
@@ -130,51 +110,46 @@ setInterval(function() {
             var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             var seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-            // Hàm tự động thêm số 0 đằng trước cho đẹp
-            function pad(number) {
-                return (number < 10 ? "0" : "") + number;
-            }
-            var now = new Date().getTime();
-            var distance = countDownDate - now;
-
-            // Nếu thời gian đếm ngược đã chạy về 0 hoặc âm (hết giờ)
-            if (distance < 0) {
-                // Tự động cộng thêm 5 phút (5 * 60 * 1000) vào mốc thời gian mới
-                countDownDate = new Date().getTime() + (5 * 60 * 1000);
-                localStorage.setItem(cacheKey, countDownDate); // Lưu lại mốc mới
-                distance = countDownDate - now;
-                var now = new Date().getTime();
-                var distance = countDownDate - now;
-
-                // Nếu đã chạy hết thời gian đếm ngược
-                if (distance < 0) {
-                clearInterval(x); // Dừng đồng hồ lại
-    
-                // Xóa bộ nhớ cache bảo trì cũ đi để lần sau vào không bị kẹt nữa
-                localStorage.removeItem(cacheKey);
-
-                // Tự động chuyển hướng về trang đăng nhập hoặc trang chính của ông
-                window.location.href = "/login"; // Hoặc đường dẫn trang chính của ông (ví dụ: "/" hoặc "/chat")
-}
-}
-
             // Đẩy dữ liệu ra các ô giao diện
             document.getElementById("days").innerHTML = pad(days);
             document.getElementById("hours").innerHTML = pad(hours);
             document.getElementById("minutes").innerHTML = pad(minutes);
             document.getElementById("seconds").innerHTML = pad(seconds);
 
-            // Xử lý khi hết giờ bảo trì
+            // Xử lý khi đồng hồ chạy về 0 (Hết giờ bảo trì)
             if (distance < 0) {
                 clearInterval(x);
                 localStorage.removeItem(cacheKey);
-                document.getElementById("countdown").innerHTML = '<div class="countdown-block" style="min-width: 300px;"><span class="countdown-number" style="font-size: 24px; color: #ff9800;">Hệ thống sắp sửa trở lại!</span></div>';
                 
+                // Hiển thị thông báo hoàn tất
+                document.getElementById("countdown").innerHTML = '<div class="countdown-block" style="min-width: 300px;"><span class="countdown-number" style="font-size: 20px; color: #ff9800;">Hệ thống sắp sửa trở lại!</span></div>';
+                
+                // Sau 3 giây tự động đá về trang đăng nhập
                 setTimeout(function() {
-                    location.reload();
+                    window.location.href = "/login";
                 }, 3000);
             }
         }, 1000);
+
+        // Kiểm tra ngầm từ Server mỗi 5 giây (Nếu ông tắt bảo trì sớm trên server)
+        let lastTimeValue = null;
+        setInterval(function() {
+            fetch('/check-maintenance')
+                .then(response => response.json())
+                .then(data => {
+                    if (lastTimeValue === null) {
+                        lastTimeValue = data.is_maintenance;
+                        return;
+                    }
+
+                    // Nếu server báo tắt bảo trì (is_maintenance = false), tự động vào trang login ngay
+                    if (data.is_maintenance === false) {
+                        localStorage.removeItem(cacheKey);
+                        window.location.href = "/login";
+                    }
+                })
+                .catch(error => console.log('Lỗi kết nối kiểm tra:', error));
+        }, 5000);
     </script>
 
 </body>
