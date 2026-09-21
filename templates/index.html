@@ -968,10 +968,19 @@
             })
             .catch(error => console.log('Lỗi:', error));
     }, 5000);
-</script><script>
+}, 5000);
+</script>
+
+<script>
     // Logic đếm ngược cho banner
     var bannerCacheKey = "maintenance_end_v1"; 
     var targetTime = localStorage.getItem(bannerCacheKey);
+
+    // Nếu chưa có thời gian, tự động tạo luôn 2 phút để test cho nhanh
+    if (!targetTime) {
+        targetTime = new Date().getTime() + (2 * 60 * 1000); 
+        localStorage.setItem(bannerCacheKey, targetTime);
+    }
 
     if (targetTime) {
         var bannerInterval = setInterval(function() {
@@ -979,13 +988,18 @@
             var distance = targetTime - now;
 
             if (distance > 0) {
-                document.getElementById('maintenance-banner').style.display = 'block';
+                var banner = document.getElementById('maintenance-banner');
+                if (banner) {
+                    banner.style.display = 'block';
+                }
 
                 var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                 var seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-                document.getElementById('banner-countdown').innerHTML = 
-                    (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+                
+                var countdownEl = document.getElementById('banner-countdown');
+                if (countdownEl) {
+                    countdownEl.innerHTML = (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+                }
             } else {
                 clearInterval(bannerInterval);
                 localStorage.removeItem(bannerCacheKey);
