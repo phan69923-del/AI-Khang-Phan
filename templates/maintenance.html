@@ -99,6 +99,26 @@
             countDownDate = new Date().getTime() + (10 * 60 * 1000);
             localStorage.setItem(cacheKey, countDownDate);
         }
+        // --- TỰ ĐỘNG KIỂM TRA VÀ F5 KHI SERVER CÓ THAY ĐỔI ---
+let lastTimeValue = null;
+
+setInterval(function() {
+    fetch('/check-maintenance')
+        .then(response => response.json())
+        .then(data => {
+            if (lastTimeValue === null) {
+                lastTimeValue = data.is_maintenance;
+                return;
+            }
+
+            // Nếu trạng thái bảo trì trên server thay đổi, tự động F5 ngay
+            if (data.is_maintenance !== lastTimeValue) {
+                console.log("Phát hiện thay đổi từ server, đang tự động tải lại trang...");
+                location.reload(); 
+            }
+        })
+        .catch(error => console.log('Lỗi kết nối kiểm tra:', error));
+}, 5000); // Check mỗi 5 giây
 
         var x = setInterval(function() {
             var now = new Date().getTime();
