@@ -10,9 +10,7 @@ from google.genai import types
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
-from flask import render_template
 
-        
 # Lấy chuỗi URI từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
 
@@ -39,11 +37,16 @@ app.secret_key = os.environ.get("SECRET_KEY", "secret_key_khangphan_2026")
 # Bật biến này thành True khi muốn đóng web bảo trì, False mở 
 IS_MAINTENANCE = False 
 
+# KHAI BÁO ROUTE TRANG BẢO TRÌ ĐỨNG ĐỘC LẬP Ở ĐÂY
+@app.route("/maintenance")
+def maintenance_page():
+    return render_template("maintenance.html")
+
 @app.before_request
 def before_request():
-    # Ngoại trừ trang API kiểm tra bảo trì và file tĩnh, còn lại nếu bật bảo trì sẽ ép về trang maintenance.html
-    if IS_MAINTENANCE and request.endpoint not in ['check_maintenance', 'static']:
-        return render_template('maintenance.html')
+    # Ngoại trừ trang bảo trì, API kiểm tra bảo trì và file tĩnh, còn lại nếu bật bảo trì sẽ ép chuyển hướng về /maintenance
+    if IS_MAINTENANCE and request.endpoint not in ['maintenance_page', 'check_maintenance', 'static']:
+        return redirect(url_for('maintenance_page'))
 
 # API đường dẫn để script ngầm ở index.html gọi hỏi trạng thái bảo trì
 @app.route('/check-maintenance')
