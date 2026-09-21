@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['desktop_app.py'],
+    ['app.py'],
     pathex=[],
     binaries=[],
     datas=[('templates', 'templates'), ('static', 'static')],
-    hiddenimports=[],
+    hiddenimports=['pymongo'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='desktop_app',
+    name='AI_KhangPhan',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
