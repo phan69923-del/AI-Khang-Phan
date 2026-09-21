@@ -11,14 +11,6 @@ from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
 from flask import render_template
-
-# Bật biến này thành False khi muốn đóng web bảo trì, True mở 
-IS_MAINTENANCE = True 
-
-@app.before_request
-def before_request():
-    if IS_MAINTENANCE:
-        return render_template('maintenance.html')
         
 # Lấy chuỗi URI từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
@@ -42,6 +34,14 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "secret_key_khangphan_2026")
+
+# Bật biến này thành False khi muốn đóng web bảo trì, True mở 
+IS_MAINTENANCE = True 
+
+@app.before_request
+def before_request():
+    if IS_MAINTENANCE:
+        return render_template('maintenance.html')
 
 # FIX LỖI PROXY VÀ COOKIE TRÊN RENDER
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
