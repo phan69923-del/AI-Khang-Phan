@@ -37,7 +37,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "secret_key_khangphan_2026")
 
 # Bật biến này thành True khi muốn đóng web bảo trì, False mở 
-IS_MAINTENANCE = True 
+IS_MAINTENANCE = False 
 
 @app.before_request
 def before_request():
