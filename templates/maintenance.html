@@ -1,4 +1,4 @@
-=<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -40,7 +40,7 @@
             margin-bottom: 30px;
         }
         
-        /* Giao diện các ô đồng hồ */
+        /* Giao diện các ô đồng hồ 4 khối */
         #countdown {
             display: flex;
             justify-content: center;
@@ -75,10 +75,7 @@
         <h1>AI_KhangPhan đang sửa chữa</h1>
         <p>Hệ thống đang tạm ngưng dịch vụ để nâng cấp các tính năng mới tuyệt vời hơn. Vui lòng quay lại sau ít phút nữa nhé!</p>
         
-        <!-- ========================================== -->
-        <!-- [CHỖ SỬA 1]: GIAO DIỆN HIỂN THỊ (Ngày, Giờ, Phút, Giây) -->
-        <!-- Xóa ô nào nếu ông không muốn hiện ô đó -->
-        <!-- ========================================== -->
+        <!-- Giao diện hiển thị Ngày, Giờ, Phút, Giây -->
         <div id="countdown">
             <div class="countdown-block"><span id="days" class="countdown-number">00</span><span class="countdown-label">Ngày</span></div>
             <div class="countdown-block"><span id="hours" class="countdown-number">00</span><span class="countdown-label">Giờ</span></div>
@@ -88,17 +85,19 @@
     </div>
 
     <script>
-        // Giữ cố định mốc thời gian bằng localStorage để không bị reset khi F5
-        var countDownDate = localStorage.getItem("maintenance_end");
+        // ========================================================
+        // MẸO: Mỗi lần muốn đổi thời gian bảo trì mới, ông chỉ cần đổi 
+        // chữ "maintenance_end_v2" thành "_v3", "_v4"... ở 2 chỗ dưới đây 
+        // là web tự hiểu và không bị dính cache cũ!
+        // ========================================================
+        var cacheKey = "maintenance_end_v2";
+        var countDownDate = localStorage.getItem(cacheKey);
         
         if (!countDownDate) {
-            // ========================================================
-            // [CHỖ SỬA 2]: THỜI GIAN BẢO TRÌ TỔNG CỘNG
-            // Hiện tại đang để 30 phút: (30 * 60 * 1000)
-            // Nếu muốn đổi thành 2 tiếng thì sửa thành: (2 * 60 * 60 * 1000)
-            // ========================================================
-            countDownDate = new Date().getTime() + ( 00*00 *01 * 60 * 1000);
-            localStorage.setItem("maintenance_end", countDownDate);
+            // Đặt thời gian bảo trì (Ví dụ: 30 phút = 30 * 60 * 1000)
+            // Hoặc nếu muốn 2 ngày: ( 10 * 60 * 1000)
+            countDownDate = new Date().getTime() + (30 * 60 * 1000);
+            localStorage.setItem(cacheKey, countDownDate);
         }
 
         var x = setInterval(function() {
@@ -116,10 +115,7 @@
                 return (number < 10 ? "0" : "") + number;
             }
 
-            // ========================================================
-            // [CHỖ SỬA 3]: ĐẨY DỮ LIỆU RA CÁC Ô (Nếu xóa ô nào ở trên HTML 
-            // thì nhớ xóa hoặc comment dòng tương ứng ở đây nhé)
-            // ========================================================
+            // Đẩy dữ liệu ra các ô giao diện
             document.getElementById("days").innerHTML = pad(days);
             document.getElementById("hours").innerHTML = pad(hours);
             document.getElementById("minutes").innerHTML = pad(minutes);
@@ -128,7 +124,7 @@
             // Xử lý khi hết giờ bảo trì
             if (distance < 0) {
                 clearInterval(x);
-                localStorage.removeItem("maintenance_end");
+                localStorage.removeItem(cacheKey);
                 document.getElementById("countdown").innerHTML = '<div class="countdown-block" style="min-width: 300px;"><span class="countdown-number" style="font-size: 24px; color: #ff9800;">Hệ thống sắp sửa trở lại!</span></div>';
                 
                 setTimeout(function() {
