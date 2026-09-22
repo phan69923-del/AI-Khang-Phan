@@ -2,6 +2,7 @@ import os
 import time
 import base64
 import traceback
+import re
 import certifi
 from flask import Flask, request, jsonify, session, send_from_directory, redirect, url_for, render_template
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -352,6 +353,10 @@ def chat():
             except Exception as e2:
                 print(f"⚠️ Model dự phòng lỗi: {e2}")
                 bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
+
+        # === DỌN SẠCH KÝ TỰ MARKDOWN ĐỂ CHỮ PHẲNG LÌ, KHÔNG DÍNH DẤU SAO/THĂNG ===
+        if bot_response:
+            bot_response = re.sub(r'[\*\#\_]+', '', bot_response)
 
         is_searched = False
         search_queries = []
