@@ -131,7 +131,6 @@ def login_page():
 def register_page():
     return render_template("register.html")
 
-# Cho phép cả GET và POST cho login để tránh lỗi 405 nếu gõ trực tiếp /login
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -162,7 +161,6 @@ def login():
     
     return render_template("login.html", error="Tài khoản hoặc mật khẩu không chính xác!")
 
-# Cho phép cả GET và POST cho register
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "GET":
