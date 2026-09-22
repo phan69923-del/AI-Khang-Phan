@@ -89,8 +89,8 @@
         var countDownDate = localStorage.getItem(cacheKey);
         
         if (!countDownDate) {
-            // Mặc định thời gian bảo trì là 5 phút nếu truy cập trực tiếp
-            countDownDate = new Date().getTime() + ( 00 * 01 * 60 * 1000);
+            // Mặc định thời gian bảo trì là 2 giờ nếu truy cập trực tiếp
+            countDownDate = new Date().getTime() + (2 * 60 * 60 * 1000);;
             localStorage.setItem(cacheKey, countDownDate);
         }
 
