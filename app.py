@@ -353,7 +353,7 @@ def chat():
                 bot_response = response.text
             except Exception as e2:
                 print(f"⚠️ Model dự phòng lỗi: {e2}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang bận. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
 
         # === DỌN SẠCH KÝ TỰ MARKDOWN ĐỂ CHỮ PHẲNG LÌ, KHÔNG DÍNH DẤU SAO/THĂNG ===
         if bot_response:
