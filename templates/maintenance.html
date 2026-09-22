@@ -85,12 +85,12 @@
 
     <script>
         // Sử dụng chung key 'maintenance_end_time' hoặc 'maintenance_end_v2' để đồng bộ với trang index
-        var cacheKey = "maintenance_end_time_v1";
+        var cacheKey = "maintenance_end_time_v2";
         var countDownDate = localStorage.getItem(cacheKey);
         
         if (!countDownDate) {
             // Mặc định thời gian bảo trì là 5 phút nếu truy cập trực tiếp
-            countDownDate = new Date().getTime() + (01 * 60 * 60 * 1000);
+            countDownDate = new Date().getTime() + (02 * 30 * 60 * 1000);
             localStorage.setItem(cacheKey, countDownDate);
         }
 
