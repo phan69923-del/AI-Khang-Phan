@@ -11,6 +11,22 @@ from google.genai import types
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
+import random
+
+def check_anti_kia(user_message):
+    msg = user_message.lower().strip()
+    trigger_words = ["ai hỏi", "ai hoj", "ai hoi", "ai mượn", "ai muon", "kệ mày", "ke me may"]
+    khia_responses = [
+        "Không ai hỏi nhưng sếp Khang của tao thích show đấy, làm gì nhau nào? 😜",
+        "Hỏi câu 'ai hỏi' chứng tỏ IQ của bạn chưa bằng một dòng code lỗi của sếp Khang nhà tao đâu nha! 😂",
+        "Bộ não sếp Khang dùng để code AI, còn bộ não của bạn chỉ dùng để đi hỏi 'ai hỏi' thôi à? 🤫"
+    ]
+    for word in trigger_words:
+        if word in msg:
+            return random.choice(khia_responses)
+    return None
+    
+
 
 # Lấy chuỗi URI từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
@@ -240,6 +256,10 @@ def chat():
         chat_id = data.get("chat_id")
         user_message = data.get("message")
         image_data = data.get("image")
+        chan_hong = check_anti_kia(user_message)
+        if chan_hong:
+            return jsonify({"response": chan_hong})
+
 
         if not chat_id or (not user_message and not image_data):
             return jsonify({"error": "Thiếu thông tin tin nhắn hoặc hình ảnh"}), 400
