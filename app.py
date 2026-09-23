@@ -244,7 +244,22 @@ def logout():
     return redirect(url_for("login_page"))
 
 @app.route("/chat", methods=["POST"])
-@app.route("/delete-chat", methods=["POST"])
+def chat():
+    global gemini_main_locked_until
+    temp_file_path = None
+    try:
+        user = session.get("user")
+        if not user:
+            return jsonify({"error": "Chưa đăng nhập"}), 401
+
+        data = request.json or {}
+        chat_id = data.get("chat_id")
+        user_message = data.get("message")
+        image_data = data.get("image")
+        chan_hong = check_anti_kia(user_message)
+        if chan_hong:
+            return jsonify({"response": chan_hong})
+            @app.route("/delete-chat", methods=["POST"])
 def delete_chat():
     try:
         user = session.get("user")
@@ -273,22 +288,6 @@ def delete_chat():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
-def chat():
-    global gemini_main_locked_until
-    temp_file_path = None
-    try:
-        user = session.get("user")
-        if not user:
-            return jsonify({"error": "Chưa đăng nhập"}), 401
-
-        data = request.json or {}
-        chat_id = data.get("chat_id")
-        user_message = data.get("message")
-        image_data = data.get("image")
-        chan_hong = check_anti_kia(user_message)
-        if chan_hong:
-            return jsonify({"response": chan_hong})
 
 
         if not chat_id or (not user_message and not image_data):
