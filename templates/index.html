@@ -952,8 +952,9 @@ function deleteChat(chatId) {
     .catch(error => {
         console.error("Lỗi:", error);
         alert("Không thể kết nối tới máy chủ!");
-    });
-}
+    }); // Dòng 955 chuẩn
+
+} // Dòng 956 chính là dấu đóng hàm deleteChat(chatId)
 
     </script>
 </body>
