@@ -259,35 +259,32 @@ def chat():
         chan_hong = check_anti_kia(user_message)
         if chan_hong:
             return jsonify({"response": chan_hong})
-            @app.route("/delete-chat", methods=["POST"])
-def delete_chat():
-    try:
-        user = session.get("user")
-        if not user:
-            return jsonify({"error": "Chưa đăng nhập"}), 401
-
-        data = request.json or {}
-        chat_id = data.get("chat_id")
-
-        if not chat_id:
-            return jsonify({"error": "Thiếu thông tin chat_id để xóa"}), 400
-
-        # Lấy toàn bộ các cuộc trò chuyện hiện tại từ MongoDB của user này
-        user_sessions = get_current_user_sessions()
-
-        # Nếu tìm thấy chat_id trong danh sách thì tiến hành xóa vĩnh viễn
-        if chat_id in user_sessions:
-            del user_sessions[chat_id]
+           @app.route("/delete-chat", methods=["POST"])
+            def delete_chat():
+            try:
+                    user = session.get("user")
+                    if not user:
+                        return jsonify({"error": "Chưa đăng nhập"}), 401
             
-            # Cập nhật lại danh sách mới (đã xóa) vào MongoDB Atlas
-            save_user_sessions(user_sessions)
-            return jsonify({"success": True, "message": "Đã xóa cuộc trò chuyện vĩnh viễn khỏi Database!"})
-        else:
-            return jsonify({"error": "Không tìm thấy cuộc trò chuyện này"}), 404
+                    data = request.json or {}
+                    chat_id = data.get("chat_id")
+            
+                    if not chat_id:
+                        return jsonify({"error": "Thiếu thông tin chat_id để xóa"}), 400
+            
+                    user_sessions = get_current_user_sessions()
+            
+                    if chat_id in user_sessions:
+                        del user_sessions[chat_id]
+                        save_user_sessions(user_sessions)
+                        return jsonify({"success": True, "message": "Đã xóa vĩnh viễn khỏi Database!"})
+                        
+                    return jsonify({"error": "Không tìm thấy cuộc trò chuyện này"}), 404
+            
+                except Exception as e:
+                    traceback.print_exc()
+                    return jsonify({"error": str(e)}), 500
 
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
 
 
         if not chat_id or (not user_message and not image_data):
