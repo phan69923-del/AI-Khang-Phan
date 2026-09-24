@@ -927,35 +927,6 @@
             
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
-
-        renderSessions(sessions);
-        // Hàm xử lý xóa chat kết nối trực tiếp với MongoDB Atlas
-function deleteChat(chatId) {
-    if (!confirm("Bạn có chắc chắn muốn xóa cuộc trò chuyện này vĩnh viễn không?")) return;
-
-    fetch('/delete-chat', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ chat_id: chatId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert("Đã xóa vĩnh viễn khỏi Database!");
-            location.reload(); // Tải lại trang để đồng bộ sạch sẽ Sidebar
-        } else {
-            alert("Lỗi: " + data.error);
-        }
-    })
-    .catch(error => {
-        console.error("Lỗi:", error);
-        alert("Không thể kết nối tới máy chủ!");
-    }); // Dòng 955 chuẩn
-
-} // Dòng 956 chính là dấu đóng hàm deleteChat(chatId)
-
     </script>
 </body>
 </html>
