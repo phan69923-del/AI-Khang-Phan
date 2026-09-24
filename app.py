@@ -15,7 +15,7 @@ import random
 
 def check_anti_kia(user_message):
     msg = user_message.lower().strip()
-    trigger_words = ["ai hỏi", "ai hoj", "ai hoi", "ai mượn", "ai muon", "kệ mày", "ke me may"]
+    trigger_words = ["ai hỏi", "ai hoi", "ai mượn", "ai muon", "kệ mày", "ke me may"]
     khia_responses = [
         "Không ai hỏi nhưng sếp Khang của tao thích show đấy, làm gì nhau nào? 😜",
         "Hỏi câu 'ai hỏi' chứng tỏ IQ của bạn chưa bằng một dòng code lỗi của sếp Khang nhà tao đâu nha! 😂",
