@@ -382,20 +382,33 @@ def chat():
                 print(f"⚠️ Model dự phòng lỗi: {e2}")
                 bot_response = "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
 
-        # === DỌN SẠCH KÝ TỰ MARKDOWN ĐỂ CHỮ PHẲNG LÌ, KHÔNG DÍNH DẤU SAO/THĂNG ===
+                # === DỌN SẠCH KÝ TỰ MARKDOWN ĐỂ CHỮ PHẲNG LÌ, KHÔNG DÍNH DẤU SAO/THĂNG ===
         if bot_response:
             bot_response = re.sub(r'[\*\#\_]+', '', bot_response)
+        else:
+            # Phòng hờ nếu cả 2 model đều lỗi hoặc trả về chuỗi rỗng, không làm sập giao diện
+            bot_response = "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
 
         is_searched = False
         search_queries = []
+        
         if response is not None:
             try:
-                if response.candidates and response.candidates[0].grounding_metadata and response.candidates[0].grounding_metadata.web_search_queries:
-
-                    is_searched = True
-                    search_queries = response.candidates[0].grounding_metadata.web_search_queries
-            except Exception:
-                pass
+                # Cách 1: Đọc theo cấu trúc của SDK google-genai mới
+                if hasattr(response, 'grounding_metadata') and response.grounding_metadata:
+                    if hasattr(response.grounding_metadata, 'web_search_queries') and response.grounding_metadata.web_search_queries:
+                        is_searched = True
+                        search_queries = response.grounding_metadata.web_search_queries
+                
+                # Cách 2: Dự phòng nếu chạy SDK cũ (nằm trong candidates)
+                elif response.candidates and len(response.candidates) > 0:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                        if hasattr(candidate.grounding_metadata, 'web_search_queries') and candidate.grounding_metadata.web_search_queries:
+                            is_searched = True
+                            search_queries = candidate.grounding_metadata.web_search_queries
+            except Exception as e_meta:
+                print(f"⚠️ Lỗi trích xuất dữ liệu tra cứu: {e_meta}")
 
         user_msg_obj = {"role": "user", "text": user_message if user_message else ""}
         if image_data:
@@ -432,4 +445,7 @@ def terms_of_service():
     return "<h1>Điều khoản dịch vụ AI KhangPhan</h1>"
 
 if __name__ == "__main__":
+    # Trên Render nên lấy port từ biến môi trường os.environ.get('PORT', 5000)
+    # Tuy nhiên giữ nguyên port 5000 nếu Gunicorn của bạn đã chỉ định đúng cấu hình
     app.run(host="0.0.0.0", port=5000, debug=True)
+
