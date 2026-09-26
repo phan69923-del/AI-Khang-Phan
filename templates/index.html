@@ -207,6 +207,18 @@
         .history-item:hover .history-actions {
             display: flex;
         }
+        /* --- THÊM VÀO DƯỚI DÒNG 208 ĐỂ ẨN HỘP THOẠI XÓA CHAT CHÍNH --- */
+        #customDeleteModal {
+        display: none; /* Mặc định ẩn đi để không bị hiện chướng mắt */
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.6); /* Làm mờ đen toàn bộ màn hình phía sau */
+        justify-content: center;
+        align-items: center;
+        z-index: 9999; /* Đảm bảo nhảy lên trên cùng tất cả các thành phần khác */
+        }
+
 
         .history-actions button {
             background: none;
@@ -638,9 +650,71 @@
     </div>
 
     <script>
+        // --- ĐOẠN JS ĐỂ GẮN LỆNH CHO NÚT BẤM XOÁ Ở THANH BÊN ---
+
+        // Hàm này được gọi khi người dùng bấm vào nút thùng rác của một cuộc trò chuyện cụ thể
+        function openDeleteModal(idCuaCuocTroChuyen) {
+            // 1. Gán ID của cuộc trò chuyện muốn xóa vào biến toàn cục currentChatId
+            currentChatId = idCuaCuocTroChuyen;
+            
+            // 2. Kích hoạt hiển thị hộp thoại xác nhận xóa lên màn hình
+            const customDeleteModal = document.getElementById("customDeleteModal");
+            if (customDeleteModal) {
+                customDeleteModal.style.display = "flex";
+            }
+        }
         let initialId = 'chat_' + Date.now();
         let currentChatId = initialId;
         let selectedBase64Image = null;
+        // --- CHÈN ĐOẠN CODE NÀY VÀO TRONG THẺ <SCRIPT> (DƯỚI DÒNG 642) ---
+
+// Lấy các thẻ HTML của Hộp thoại xóa ra để xử lý
+const customDeleteModal = document.getElementById("customDeleteModal");
+const modalCancelBtn = document.getElementById("modalCancelBtn");
+const modalConfirmBtn = document.getElementById("modalConfirmBtn");
+const chatContainer = document.getElementById("chatContainer") || document.querySelector(".chat-messages"); // Thay đúng ID vùng chứa tin nhắn chat của sếp
+
+// 1. Khi bấm nút "Huỷ" -> Ẩn hộp thoại đi
+if (modalCancelBtn) {
+    modalCancelBtn.addEventListener("click", () => {
+        customDeleteModal.style.display = "none";
+    });
+}
+
+// 2. Khi bấm nút "Xoá" -> Gọi API xóa tận gốc trên Backend Python
+if (modalConfirmBtn) {
+    modalConfirmBtn.addEventListener("click", () => {
+        // Gửi yêu cầu xóa lịch sử chat của id hiện tại lên máy chủ Flask
+        fetch("/api/delete_chat", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ chat_id: currentChatId }) // Sử dụng biến currentChatId ở dòng 642 của sếp
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Xóa sạch các nội dung bong bóng chat đang hiển thị trên màn hình
+                if (chatContainer) {
+                    chatContainer.innerHTML = ""; 
+                }
+                
+                // Ẩn hộp thoại xóa đi
+                customDeleteModal.style.display = "none";
+                
+                console.log("Đã xóa sạch lịch sử chat đồng bộ trên Server!");
+            } else {
+                alert("Lỗi máy chủ: " + data.error);
+            }
+        })
+        .catch(err => {
+            console.error("Lỗi kết nối đến máy chủ:", err);
+            alert("Không thể kết nối đến máy chủ xử lý xóa!");
+        });
+    });
+}
+
         
         let sessions = {
             [initialId]: { 
