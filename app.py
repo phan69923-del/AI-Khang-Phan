@@ -347,24 +347,29 @@ def chat():
         bot_response = ""
         current_time = time.time()
         
-        if not is_main_locked:
-        try:
-            response = gemini_client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=gemini_contents,
-                # ĐÃ XÓA DÒNG config=config Ở ĐÂY
-                config=types.GenerateContentConfig(
-                    temperature=0.7,
-                    thinking_config=types.ThinkingConfig(thinking_budget=0)
+                # Dòng 352: Đảm bảo KHÔNG có từ khóa try: nào đứng khơi khơi ở đây
+            if is_main_locked and time.time() < gemini_main_locked_until:
+                use_fallback = True
+            else:
+                use_fallback = False
+
+            if not use_fallback:
+                try: # Khối try này phải bọc ngay sát lệnh gọi API
+                    response = gemini_client.models.generate_content(
+                        model="gemini-3.8-flash",
+                        contents=gemini_contents,
+                        config=types.GenerateContentConfig(
+                            temperature=0.7,
+                            thinking_config=types.ThinkingConfig(thinking_budget=0)
                 )
             )
             bot_response = response.text
+        except Exception as e: # Khối except phải đi liền ngay sau try ở trên
+            print(f"⚠️ Model chính lỗi: {e}")
+            gemini_main_locked_until = time.time() + 60
+            is_main_locked = True
+            use_fallback = True
 
-                bot_response = response.text
-            except Exception as e:
-                print(f"⚠️ Model chính lỗi: {e}")
-                gemini_main_locked_until = time.time() + 60
-                is_main_locked = True
 
         if is_main_locked:
             try:
