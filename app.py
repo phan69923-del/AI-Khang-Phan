@@ -347,31 +347,30 @@ def chat():
         bot_response = ""
         current_time = time.time()
         
-                # Dòng 352: Đảm bảo KHÔNG có từ khóa try: nào đứng khơi khơi ở đây
+        # --- ĐOẠN ĐÃ ĐƯỢC CĂN CHỈNH THẲNG HÀNG TĂM TẮP ---
         if is_main_locked and time.time() < gemini_main_locked_until:
-                use_fallback = True
-            else:
-                use_fallback = False
-
-            if not use_fallback:
-                try: # Khối try này phải bọc ngay sát lệnh gọi API
-                    response = gemini_client.models.generate_content(
-                        model="gemini-3.8-flash",
-                        contents=gemini_contents,
-                        config=types.GenerateContentConfig(
-                            temperature=0.7,
-                            thinking_config=types.ThinkingConfig(thinking_budget=0)
-                )
-            )
-            bot_response = response.text
-        except Exception as e: # Khối except phải đi liền ngay sau try ở trên
-            print(f"⚠️ Model chính lỗi: {e}")
-            gemini_main_locked_until = time.time() + 60
-            is_main_locked = True
             use_fallback = True
+        else:
+            use_fallback = False
 
+        if not use_fallback:
+            try:
+                response = gemini_client.models.generate_content(
+                    model="gemini-3.8-flash",
+                    contents=gemini_contents,
+                    config=types.GenerateContentConfig(
+                        temperature=0.7,
+                        thinking_config=types.ThinkingConfig(thinking_budget=0)
+                    )
+                )
+                bot_response = response.text
+            except Exception as e:
+                print(f"⚠️ Model chính lỗi: {e}")
+                gemini_main_locked_until = time.time() + 60
+                is_main_locked = True
+                use_fallback = True
 
-        if is_main_locked:
+        if use_fallback:  # Đã sửa thành use_fallback để lập tức chạy nếu model chính sập
             try:
                 response = gemini_client.models.generate_content(
                     model="gemini-3.5-flash-lite",
@@ -383,7 +382,6 @@ def chat():
                 print(f"⚠️ Model dự phòng lỗi: {e2}")
                 bot_response = "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
 
-
         # === DỌN SẠCH KÝ TỰ MARKDOWN ĐỂ CHỮ PHẲNG LÌ, KHÔNG DÍNH DẤU SAO/THĂNG ===
         if bot_response:
             bot_response = re.sub(r'[\*\#\_]+', '', bot_response)
@@ -393,6 +391,7 @@ def chat():
         if response is not None:
             try:
                 if response.candidates and response.candidates[0].grounding_metadata and response.candidates[0].grounding_metadata.web_search_queries:
+
                     is_searched = True
                     search_queries = response.candidates[0].grounding_metadata.web_search_queries
             except Exception:
