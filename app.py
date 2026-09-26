@@ -12,6 +12,9 @@ from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
 import random
+is_main_locked = False
+gemini_main_locked_until = 0
+
 
 def check_anti_kia(user_message):
     msg = user_message.lower().strip()
@@ -245,6 +248,12 @@ def logout():
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    global is_main_locked
+    global gemini_main_locked_until
+
+    # ... các đoạn code xử lý chat cũ của bạn giữ nguyên phía dưới ...
+    data = request.get_json()
+    chat_id = data.get("chat_id")
     global gemini_main_locked_until
     temp_file_path = None
     try:
