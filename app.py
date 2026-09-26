@@ -348,7 +348,7 @@ def chat():
         current_time = time.time()
         
                 # Dòng 352: Đảm bảo KHÔNG có từ khóa try: nào đứng khơi khơi ở đây
-            if is_main_locked and time.time() < gemini_main_locked_until:
+        if is_main_locked and time.time() < gemini_main_locked_until:
                 use_fallback = True
             else:
                 use_fallback = False
