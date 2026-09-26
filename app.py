@@ -452,28 +452,28 @@ def privacy_policy():
 @app.route("/terms")
 def terms_of_service():
     return "<h1>Điều khoản dịch vụ AI KhangPhan</h1>"
-    @app.route("/api/delete_chat", methods=["POST"])
+
+@app.route("/api/delete_chat", methods=["POST"])
 def delete_chat():
     global user_sessions
     try:
         data = request.get_json()
         chat_id = data.get("chat_id")
-        
+
         if not chat_id:
             return jsonify({"success": False, "error": "Thiếu chat_id"}), 400
-            
-        # 1. Xóa sạch lịch sử tin nhắn trong bộ nhớ tạm server
+
+        # # 1. Xóa sạch lịch sử tin nhắn trong bộ nhớ tạm server
         if chat_id in user_sessions:
-            user_sessions[chat_id]["messages"] = [] # Reset mảng tin nhắn về rỗng
-            save_user_sessions(user_sessions)       # Lưu lại vào file JSON (nếu có hàm này)
-            
-        # 2. NẾU BẠN CÓ DÙNG MONGODB: Hãy bỏ dấu comment dòng dưới để xóa luôn trong DB nhé
+            user_sessions[chat_id]["messages"] = []  # Reset mảng tin nhắn về rỗng
+            save_user_sessions(user_sessions)        # Lưu lại vào file JSON
+
+        # # 2. NẾU BẠN CÓ DÙNG MONGODB: Hãy bỏ dấu comment dòng dưới để xóa luôn trong DB nhé
         # mongo.db.chats.update_one({"chat_id": chat_id}, {"$set": {"messages": []}})
-        
+
         return jsonify({"success": True, "message": "Đã xóa lịch sử chat!"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
 
 if __name__ == "__main__":
     # Trên Render nên lấy port từ biến môi trường os.environ.get('PORT', 5000)
