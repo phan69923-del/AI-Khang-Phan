@@ -108,7 +108,7 @@
                         countDownDate = data.end_time;
                     } else if (!countDownDate) {
                         // Fallback mặc định 2 tiếng tính từ lúc vào nếu server chưa cấu hình end_time riêng
-                        countDownDate = new Date().getTime() + (2 * 60 * 60 * 1000);
+                        countDownDate = new Date().getTime() + (24 * 60 * 60 * 60 * 1000);
                         #sửa TG ở đayyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
                     }
                 })
