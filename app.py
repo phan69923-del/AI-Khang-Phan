@@ -12,7 +12,7 @@ from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
 import random
-is_main_locked = False
+is_main_locked = True
 gemini_main_locked_until = 0
 
 
