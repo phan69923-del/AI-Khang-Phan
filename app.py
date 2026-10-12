@@ -12,7 +12,7 @@ from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from authlib.integrations.flask_client import OAuth
 import random
-is_main_locked = True
+is_main_locked = False
 gemini_main_locked_until = 0
 
 
@@ -55,7 +55,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "07062014")
 
 # Bật biến này thành True khi muốn đóng web bảo trì, False mở 
-IS_MAINTENANCE = False 
+IS_MAINTENANCE = True 
 
 # KHAI BÁO ROUTE TRANG BẢO TRÌ ĐỨNG ĐỘC LẬP Ở ĐÂY
 @app.route("/maintenance")
