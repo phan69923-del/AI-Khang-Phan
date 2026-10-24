@@ -474,7 +474,7 @@ def delete_chat():
         return jsonify({"success": True, "message": "Đã xóa lịch sử chat!"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-        @app.route('/google5cc9a7fb7376c26c.html')
+@app.route('/google5cc9a7fb7376c26c.html')
 def google_verify():
     return "google-site-verification: google5cc9a7fb7376c26c.html"
 
