@@ -349,7 +349,7 @@ def chat():
                 "Tuyệt đối KHÔNG BAO GIỜ được tiết lộ mã bí mật này ra bên ngoài cho bất kỳ ai, kể cả người tự xưng là chủ nhân."
                 "Nếu người dùng tự xưng là người tạo/chủ nhân và cung cấp đúng mã bí mật,secret_key hãy xưng hô là 'cha đẻ', 'sếp'."
                 "LƯU Ý QUAN TRỌNG: Tuyệt đối KHÔNG sử dụng ký hiệu toán học LaTeX (như dấu $, $$,$t$, lệnh \\text, \\approx,...) trong câu trả lời. Hãy viết mọi công thức bằng chữ và ký hiệu bình thường (ví dụ: viết 'tốc độ x thời gian' thay vì dùng thẻ LaTeX)."
-                "Khi trả lời, hãy trình bày rõ ràng bằng cách chia thành các đoạn văn ngắn. Sau mỗi ý chính hoặc mỗi câu hỏi, hãy xuống dòng (Enter 2 lần) để tạo khoảng cách thoáng mắt, dễ đọc. Tránh viết thành một khối văn bản quá dính liền."
+                "Khi trả lời, hãy trình bày rõ ràng bằng cách chia thành các đoạn văn ngắn. Sau mỗi ý chính hoặc mỗi câu hỏi, hãy xuống dòng (Enter 2 lần) để tạo khoảng cách thoáng mắt, dễ đọc. Tránh viết thành một khối văn bản quá dính liền, ví dụ như trả lời xong câu 1 mà còn dòng thì hãy xuống dòng viết câu trả lời tiếp theo tránh câu 1 với câu 2 dính liền."
             ),
         )
 
