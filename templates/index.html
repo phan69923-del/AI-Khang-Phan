@@ -849,27 +849,41 @@ if (modalConfirmBtn) {
             }
         }
 
-        function switchChat(chatId, sessionList) {
-            currentChatId = chatId;
-            const chatMessages = document.getElementById('chatMessages');
-            chatMessages.innerHTML = '';
-
-            if (sessionList[chatId] && sessionList[chatId].messages) {
-                sessionList[chatId].messages.forEach(msg => {
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = msg.role === 'user' ? 'message user' : 'message bot';
-                    
-                    if (msg.image) {
-                        msgDiv.innerHTML = `${msg.text ? msg.text + '<br>' : ''}<img src="${msg.image}" alt="Uploaded image">`;
-                    } else {
-                        msgDiv.textContent = msg.text;
-                    }
-                    chatMessages.appendChild(msgDiv);
-                });
-            }
-            renderSessions(sessionList);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+function switchChat(chatId, sessionList) {
+    // Sửa lỗi nếu hệ thống truyền nhầm nguyên mảng ID vào thay vì 1 chuỗi ID đơn lẻ
+    if (Array.isArray(chatId)) {
+        if (chatId.length > 0) {
+            chatId = chatId[0]; // Lấy phần tử ID đầu tiên trong mảng
+        } else {
+            // Nếu không còn phòng chat nào, dọn sạch màn hình và dừng lại
+            document.getElementById('chatMessages').innerHTML = '';
+            return;
         }
+    }
+
+    currentChatId = chatId;
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '';
+
+    if (sessionList[chatId] && sessionList[chatId].messages) {
+        sessionList[chatId].messages.forEach(msg => {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = msg.role === 'user' ? 'message user' : 'message bot';
+            
+            if (msg.image) {
+                msgDiv.innerHTML = `${msg.text ? msg.text + '<br>' : ''}<img src="${msg.image}" alt="Uploaded image">`;
+            } else {
+                msgDiv.textContent = msg.text;
+            }
+            chatMessages.appendChild(msgDiv);
+        });
+    }
+    
+    renderSessions(sessionList);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+chatId = chatId;
 
         function renameChat(chatId) {
             const currentTitle = sessions[chatId]?.title || "Cuộc trò chuyện mới";
