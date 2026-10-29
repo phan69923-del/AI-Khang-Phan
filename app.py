@@ -457,25 +457,46 @@ def terms_of_service():
 
 @app.route("/api/delete_chat", methods=["POST"])
 def delete_chat():
-    global user_sessions
     try:
-        data = request.get_json()
+        username = session.get("user")
+        if not username:
+            return jsonify({"success": False, "error": "Chưa đăng nhập"}), 401
+            
+        data = request.get_json() or {}
         chat_id = data.get("chat_id")
-
+        
         if not chat_id:
             return jsonify({"success": False, "error": "Thiếu chat_id"}), 400
-
-        # # 1. Xóa sạch lịch sử tin nhắn trong bộ nhớ tạm server
+            
+        # Lấy toàn bộ danh sách phiên chat từ MongoDB của user
+        user_sessions = get_current_user_sessions()
+        
+        # Tiến hành xóa phòng chat khỏi danh sách
         if chat_id in user_sessions:
-            user_sessions[chat_id]["messages"] = []  # Reset mảng tin nhắn về rỗng
-            save_user_sessions(user_sessions)        # Lưu lại vào file JSON
-
-        # # 2. NẾU BẠN CÓ DÙNG MONGODB: Hãy bỏ dấu comment dòng dưới để xóa luôn trong DB nhé
-        # mongo.db.chats.update_one({"chat_id": chat_id}, {"$set": {"messages": []}})
-
-        return jsonify({"success": True, "message": "Đã xóa lịch sử chat!"})
+            del user_sessions[chat_id]
+            
+            # Nếu xóa hết sạch phòng chat, tự động tạo lại một phòng mặc định để không bị lỗi giao diện
+            if not user_sessions:
+                initial_id = f"chat_{int(time.time() * 1000)}"
+                user_sessions = {
+                    initial_id: {
+                        "title": "Lời chào",
+                        "messages": [{"role": "bot", "text": "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?"}]
+                    }
+                }
+                
+            # Lưu lại danh sách mới cập nhật trực tiếp vào MongoDB Atlas (đã sửa chuẩn tên hàm)
+            save_user_sessions(user_sessions)
+            return jsonify({"success": True, "sessions": user_sessions})
+            
+        return jsonify({"success": False, "error": "Không tìm thấy cuộc trò chuyện"}), 404
+        
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/google5cc9a7fb7376c26c.html')
 def google_verify():
     return "google-site-verification: google5cc9a7fb7376c26c.html"
