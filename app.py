@@ -458,6 +458,8 @@ def terms_of_service():
 @app.route("/api/delete_chat", methods=["POST"])
 def delete_chat():
     try:
+        import time  
+        
         username = session.get("user")
         if not username:
             return jsonify({"success": False, "error": "Chưa đăng nhập"}), 401
@@ -468,24 +470,36 @@ def delete_chat():
         if not chat_id:
             return jsonify({"success": False, "error": "Thiếu chat_id"}), 400
             
-        # Lấy toàn bộ danh sách phiên chat từ MongoDB của user
         user_sessions = get_current_user_sessions()
         
-        # Tiến hành xóa phòng chat khỏi danh sách
+ 
+        if isinstance(user_sessions, list):
+            user_sessions = {}
+            
+    
         if chat_id in user_sessions:
             del user_sessions[chat_id]
             
-            # Nếu xóa hết sạch phòng chat, tự động tạo lại một phòng mặc định để không bị lỗi giao diện
-            if not user_sessions:
-                initial_id = f"chat_{int(time.time() * 1000)}"
-                user_sessions = {
-                    initial_id: {
-                        "title": "Lời chào",
-                        "messages": [{"role": "bot", "text": "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?"}]
-                    }
+
+        if not user_sessions or len(user_sessions) == 0:
+            initial_id = f"chat_{int(time.time() * 1000)}"
+            user_sessions = {
+                initial_id: {
+                    "title": "Lời chào",
+                    "messages": [{"role": "bot", "text": "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?"}]
                 }
-                
-            # Lưu lại danh sách mới cập nhật trực tiếp vào MongoDB Atlas (đã sửa chuẩn tên hàm)
+            }
+            
+        # Lưu lại danh sách mới cập nhật trực tiếp vào MongoDB Atlas
+        save_user_sessions(user_sessions)
+        return jsonify({"success": True, "sessions": user_sessions})
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()  # In lỗi chi tiết ra màn hình log của Render để debug
+        return jsonify({"success": False, "error": str(e)}), 500
+
+  
             save_user_sessions(user_sessions)
             return jsonify({"success": True, "sessions": user_sessions})
             
