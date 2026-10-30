@@ -219,7 +219,13 @@ def register():
 
 @app.route("/login/google")
 def login_google():
-    redirect_uri = url_for("google_callback", _external=True)
+    # Tự động nhận diện domain gốc dựa theo môi trường chạy
+    if os.environ.get('VERCEL'):
+        base_url = "https://ai-khangphan.vercel.app"
+    else:
+        base_url = "https://ai-khang-phan.onrender.com"
+        
+    redirect_uri = f"{base_url}/login/google/callback"
     return google.authorize_redirect(redirect_uri)
 
 @app.route("/login/google/callback")
@@ -228,11 +234,20 @@ def google_callback():
         code = request.args.get("code")
         if not code:
             return "Không tìm thấy mã xác thực từ Google", 400
+            
+        if os.environ.get('VERCEL'):
+            base_url = "https://ai-khangphan.vercel.app"
+        else:
+            base_url = "https://ai-khang-phan.onrender.com"
+            
+        redirect_uri = f"{base_url}/login/google/callback"
         
         token = google.fetch_access_token(
             code=code,
-            redirect_uri=url_for("google_callback", _external=True)
+            redirect_uri=redirect_uri
         )
+
+
         
         resp = google.get("https://openidconnect.googleapis.com/v1/userinfo", token=token)
         user_info = resp.json()
