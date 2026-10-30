@@ -516,5 +516,7 @@ def google_verify():
     return "google-site-verification: google5cc9a7fb7376c26c.html"
 
 
+port = int(os.environ.get("PORT", 5000))
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=True)
