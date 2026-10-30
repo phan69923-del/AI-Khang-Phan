@@ -500,8 +500,8 @@ def delete_chat():
         return jsonify({"success": False, "error": str(e)}), 500
 
   
-            save_user_sessions(user_sessions)
-            return jsonify({"success": True, "sessions": user_sessions})
+        save_user_sessions(user_sessions)
+        return jsonify({"success": True, "sessions": user_sessions})
             
         return jsonify({"success": False, "error": "Không tìm thấy cuộc trò chuyện"}), 404
         
