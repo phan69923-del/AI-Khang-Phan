@@ -96,8 +96,13 @@ google = oauth.register(
 api_key = os.environ.get("GEMINI_API_KEY")
 gemini_client = genai.Client(api_key=api_key)
 
-TEMP_UPLOAD_FOLDER = "temp_uploads"
+if os.environ.get('VERCEL'):
+    TEMP_UPLOAD_FOLDER = '/tmp/temp_uploads'
+else:
+    TEMP_UPLOAD_FOLDER = 'temp_uploads'
+
 os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
+
 
 gemini_main_locked_until = 0
 
