@@ -541,25 +541,38 @@ def google_verify():
 def guest_chat_api():
     try:
         user_data = request.get_json()
-        user_message = user_data.get("message")
+        
+        # Lấy tin nhắn (hỗ trợ cả từ khóa 'message' và 'prompt' tùy theo code JS cũ của bạn)
+        user_message = user_data.get("message") or user_data.get("prompt")
+        
         if not user_message:
-            return {"reply": "Thiếu thông tin tin nhắn hoặc hình ảnh!"}
+            return {"response": "Thiếu thông tin tin nhắn hoặc hình ảnh!", "reply": "Thiếu thông tin tin nhắn hoặc hình ảnh!"}
         
         import google.generativeai as genai
         import os
         
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
-            return {"reply": "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"}
+            return {"response": "Thiếu API Key trên Vercel!", "reply": "Thiếu API Key trên Vercel!"}
             
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-3.5-flash-lite")
         
         response = model.generate_content(user_message)
-        return {"reply": response.text}
+        ai_text = response.text
+        
+        # Trả về tất cả các định dạng từ khóa phổ biến để JS kiểu gì cũng đọc được
+        return {
+            "response": ai_text,
+            "reply": ai_text,
+            "text": ai_text
+        }
         
     except Exception as e:
-        return {"reply": "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"}
+        return {
+            "response": f"Lỗi gọi Gemini: {str(e)}",
+            "reply": "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
+        }
 
 
 
