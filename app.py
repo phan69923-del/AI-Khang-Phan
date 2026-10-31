@@ -144,9 +144,7 @@ def save_user_sessions(user_sessions):
 
 @app.route("/")
 def index():
-    if "user" not in session:
-        return redirect(url_for("login_page"))
-    return render_template("index.html")
+    return render_template("index2.html")
 
 @app.route("/login-page")
 def login_page():
@@ -531,6 +529,31 @@ def delete_chat():
 @app.route('/google5cc9a7fb7376c26c.html')
 def google_verify():
     return "google-site-verification: google5cc9a7fb7376c26c.html"
+
+@app.route("/api/chat/guest", methods=["POST"])
+def guest_chat_api():
+    try:
+        user_data = request.get_json()
+        user_message = user_data.get("message")
+        if not user_message:
+            return {"reply": "Thiếu thông tin tin nhắn hoặc hình ảnh!"}
+        
+        import google.generativeai as genai
+        import os
+        
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            return {"reply": "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"}
+            
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-3.5-flash-lite")
+        
+        response = model.generate_content(user_message)
+        return {"reply": response.text}
+        
+    except Exception as e:
+        return {"reply": "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"}
+
 
 
 port = int(os.environ.get("PORT", 5000))
