@@ -17,6 +17,8 @@ gemini_main_locked_until = 0
 
 app = Flask(__name__)
 
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "chuoi_tạm_thời_khi_chạy_local")
+
 def check_anti_kia(user_message):
     msg = user_message.lower().strip()
     trigger_words = ["ai hỏi", "ai hoi", "ai mượn", "ai muon", "kệ mày", "ke me may"]
