@@ -15,6 +15,7 @@ import random
 is_main_locked = False
 gemini_main_locked_until = 0
 
+app = Flask(__name__)
 
 def check_anti_kia(user_message):
     msg = user_message.lower().strip()
