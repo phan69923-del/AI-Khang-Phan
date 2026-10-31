@@ -466,11 +466,11 @@ def chat():
 
 @app.route("/privacy")
 def privacy_policy():
-    return "<h1>Chính sách bảo mật AI KhangPhan</h1>"
+    return render_template("privacy.html")
 
 @app.route("/terms")
 def terms_of_service():
-    return "<h1>Điều khoản dịch vụ AI KhangPhan</h1>"
+    return render_template("terms.html")
 
 @app.route("/api/delete_chat", methods=["POST"])
 def delete_chat():
