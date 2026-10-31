@@ -142,9 +142,16 @@ def save_user_sessions(user_sessions):
     except Exception as e:
         print(f"Lỗi khi lưu lịch sử chat vào MongoDB: {e}")
 
+# Vào trang chủ mặc định (/) sẽ hiện trang Đăng nhập trước
 @app.route("/")
 def index():
+    return render_template("login.html")
+
+# Tạo một đường dẫn riêng (/guest) để trả về trang Trải nghiệm khách
+@app.route("/guest")
+def guest_chat():
     return render_template("index2.html")
+
 
 @app.route("/login-page")
 def login_page():
