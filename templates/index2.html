@@ -997,7 +997,7 @@ function switchChat(chatId, sessionList) {
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
-                const response = await fetch('/chat', {
+                    const response = await fetch('/api/chat/guest', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: messageText, image: currentImg, chat_id: currentChatId })
