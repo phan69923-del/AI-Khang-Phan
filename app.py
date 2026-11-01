@@ -556,7 +556,7 @@ def guest_chat_api():
         if not api_key:
             return {"response": "Thiếu API Key trên Vercel!", "reply": "Thiếu API Key trên Vercel!"}
             
-        genai.configure(api_key=api_key)
+        genai.configure(GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-3.5-flash-lite")
         
         response = model.generate_content(user_message)
