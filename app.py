@@ -585,6 +585,11 @@ def member_home():
     if not session.get("user"):
         return redirect("/")
     return render_template("index.html")
+@app.route("/security-commitment")
+def security_commitment():
+    # Trả về file giao diện cam kết bảo mật
+    return render_template("security.html")
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
