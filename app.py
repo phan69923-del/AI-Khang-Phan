@@ -261,8 +261,9 @@ def google_callback():
         if not users_collection.find_one({"username": email}):
             users_collection.insert_one({"username": email, "auth_type": "google"})
             
-        session["user"] = email
-        return redirect("/")
+    session["user"] = email
+    return redirect("/chat")
+
     except Exception as e:
         return f"Lỗi xác thực Google: {str(e)}"
 
