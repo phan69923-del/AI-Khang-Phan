@@ -556,8 +556,8 @@ def guest_chat_api():
         if not api_key:
             return {"response": "Thiếu API Key trên Vercel!", "reply": "Thiếu API Key trên Vercel!"}
             
-        genai.configure(GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-3.5-flash-lite")
+        response = client.models.generate_content(
+        model="gemini-3.5-flash-lite"
         
         response = model.generate_content(user_message)
         ai_text = response.text
@@ -574,7 +574,7 @@ def guest_chat_api():
             "response": f"Lỗi gọi Gemini: {str(e)}",
             "reply": "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
         }
-@app.route("/main")
+@app.route("/chat")
 def member_home():
     if not session.get("user"):
         return redirect("/")
