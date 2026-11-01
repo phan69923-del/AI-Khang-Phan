@@ -554,10 +554,12 @@ def guest_chat_api():
         
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
-            return {"response": "Thiếu API Key trên Vercel!", "reply": "Thiếu API Key trên Vercel!"}
+            return {"response": "Thiếu API Key!", "reply": "Thiếu API Key!"}
             
-        genai.configure(GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-3.5-flash-lite")
+        response = client.models.generate_content(
+            model='gemini-3.5-flash-lite',
+            contents=user_message,
+        )
         
         response = model.generate_content(user_message)
         ai_text = response.text
