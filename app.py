@@ -262,7 +262,7 @@ def google_callback():
             users_collection.insert_one({"username": email, "auth_type": "google"})
             
         session["user"] = email
-        return redirect("/chat")
+        return redirect("/main")
 
     except Exception as e:
         return f"Lỗi xác thực Google: {str(e)}"
@@ -574,9 +574,12 @@ def guest_chat_api():
             "response": f"Lỗi gọi Gemini: {str(e)}",
             "reply": "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
         }
-
-
-
+@app.route("/main")
+def member_home():
+    if not session.get("user"):
+        return redirect("/")
+    return render_template("index.html")
+    
 port = int(os.environ.get("PORT", 5000))
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port, debug=True)
