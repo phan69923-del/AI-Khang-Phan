@@ -552,6 +552,7 @@ def guest_chat_api():
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             return {"response": "Thiếu API Key!", "reply": "Thiếu API Key!"}
+        client = genai.Client(api_key=api_key)
             
         response = client.models.generate_content(
             model='gemini-3.5-flash-lite',
