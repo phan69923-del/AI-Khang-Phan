@@ -548,26 +548,22 @@ def guest_chat_api():
         
         if not user_message:
             return {"response": "Thiếu thông tin tin nhắn hoặc hình ảnh!", "reply": "Thiếu thông tin tin nhắn hoặc hình ảnh!"}
-        
+
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             return {"response": "Thiếu API Key!", "reply": "Thiếu API Key!"}
+
         client = genai.Client(api_key=api_key)
-            
+
         response = client.models.generate_content(
             model='gemini-3.5-flash-lite',
             contents=user_message,
         )
-        
-        response = model.generate_content(user_message)
-        ai_text = response.text
-        
-        # Trả về tất cả các định dạng từ khóa phổ biến để JS kiểu gì cũng đọc được
-        return {
-            "response": ai_text,
-            "reply": ai_text,
-            "text": ai_text
-        }
+
+        ai_reply = response.text
+
+        return {"response": ai_reply, "reply": ai_reply}
+
         
     except Exception as e:
         return {
