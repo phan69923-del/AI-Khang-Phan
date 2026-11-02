@@ -390,7 +390,7 @@ def chat():
         if not use_fallback:
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-3.8-flash",
                     contents=gemini_contents,
                     config=types.GenerateContentConfig(
                         temperature=0.7,
@@ -407,7 +407,7 @@ def chat():
         if use_fallback:  # Đã sửa thành use_fallback để lập tức chạy nếu model chính sập
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-3.6-flash",
                     contents=gemini_contents,
                     config=config,
                 )
@@ -416,7 +416,6 @@ def chat():
                 print(f"⚠️ Model dự phòng lỗi: {e2}")
                 bot_response = "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
 
-                # === DỌN SẠCH KÝ TỰ MARKDOWN ĐỂ CHỮ PHẲNG LÌ, KHÔNG DÍNH DẤU SAO/THĂNG ===
         if bot_response:
             bot_response = re.sub(r'[\*\#\_]+', '', bot_response)
         else:
