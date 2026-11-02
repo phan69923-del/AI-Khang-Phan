@@ -14,12 +14,11 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            position: relative; /* Thêm để định vị phần tử con */
+            position: relative; 
         }
-        
-        /* 1. THANH CHẠY CHỮ ĐỎ TRẢI DÀI TRÊN CÙNG SÁT MÉP URL */
+
         .top-marquee-bar {
-            position: fixed; /* Nổi độc lập, không can thiệp vào Flexbox căn giữa của body */
+            position: fixed; 
             top: 0;
             left: 0;
             width: 100%;
@@ -104,14 +103,12 @@
 </head>
 <body>
 
-    <!-- THANH THÔNG BÁO CHẠY CHỮ DÀI (MẶC ĐỊNH ẨN, CHỈ HIỆN Ở RENDER) -->
     <div id="render-top-marquee" class="top-marquee-bar" style="display: none;">
         <marquee behavior="scroll" direction="left" scrollamount="6">
-            🛑 <strong>CẢNH BÁO MÁY CHỦ:</strong> Phiên bản Render có nguy cơ phản hồi chậm hoặc sập do giới hạn tài nguyên. Bạn nên chuyển sang sử dụng phiên bản 🚀 <strong>Vercel Endpoint</strong> tại: <a href="https://ai-khangphan.vercel.app" style="color: #38bdf8; text-decoration: underline; font-weight: bold;">ai-khangphan.vercel.app</a> để có trải nghiệm trò chuyện mượt mà, tốc độ tối đa và an toàn nhất! Xin cảm ơn!
+            🛑 <strong>CẢNH BÁO MÁY CHỦ:</strong> Phiên bản Render có nguy cơ phản hồi chậm hoặc sập do giới hạn tài nguyên. Bạn nên chuyển sang sử dụng phiên bản 🚀 <strong>Vercel Endpoint</strong> tại: <a href="https://ai-khangphan.vercel.app" style="color: #38bdf8; text-decoration: underline; font-weight: bold;">https://ai-khangphan.vercel.app</a> để có trải nghiệm trò chuyện mượt mà, tốc độ tối đa và an toàn nhất! Xin cảm ơn!
         </marquee>
     </div>
 
-    <!-- HỘP ĐĂNG NHẬP (LUÔN CHÍNH GIỮA MÀN HÌNH CHUẨN ĐÉT) -->
     <div class="login-card">
         <h2>Đăng Nhập AI</h2>
         <p class="subtitle">
@@ -122,7 +119,6 @@
             <span style="font-size: 13px; color: #888;">(Trang web đã được tích hợp công cụ uptimerobot cho phiên bản render)</span>
         </p>
 
-        <!-- Nút Login Google -->
         <a href="/login/google" class="google-btn">
             <svg width="18" height="18" viewBox="0 0 48 48">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.7 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -132,15 +128,13 @@
             </svg>
             Đăng nhập với Google
         </a>
-
-        <!-- Nút Trải nghiệm khách -->
+ -->
         <div style="margin-top: 15px; text-align: center;">
             <a href="/guest" style="display: inline-block; width: 100%; border: 1px solid #38bdf8; color: #38bdf8; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; box-sizing: border-box; transition: all 0.2s;" onmouseover="this.style.backgroundColor='rgba(56, 189, 248, 0.1)'" onmouseout="this.style.backgroundColor='transparent'">
                 🚀 Trải nghiệm ngay (Không cần đăng nhập)
             </a>
         </div>
 
-        <!-- Chân trang bảo mật gọn gàng hàng dọc -->
         <div class="footer-info">
             <h3>🔒 Bảo mật & Quyền riêng tư</h3>
             <div class="flex-links">
@@ -159,13 +153,10 @@
         <p style="font-size: 12px; color: #888; margin-top: 20px; margin-bottom: 0;">Một sản phẩm được phát triển bởi Khang Phan (Phan Tăng Hoàng Khang).</p>
     </div>
 
-    <!-- JAVASCRIPT ĐIỀU KHIỂN: CHỈ HIỆN CHỮ CHẠY NẾU LÀ LINK RENDER VÀ ĐANG Ở TRANG LOGIN -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // Kiểm tra xem có đúng là đang truy cập bằng đường dẫn Render hay không
             const isRender = window.location.hostname.includes("onrender.com");
-            
-            // Nếu đúng là bản Render, bật hiển thị thanh chạy chữ lên đầu trang
+
             if (isRender) {
                 const marqueeBar = document.getElementById("render-top-marquee");
                 if (marqueeBar) marqueeBar.style.display = "block";
