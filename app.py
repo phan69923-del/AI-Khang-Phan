@@ -378,7 +378,6 @@ def chat():
         response = None
         bot_response = ""
         current_time = time.time()
-
         if is_main_locked and time.time() < gemini_main_locked_until:
             use_fallback = True
         else:
@@ -387,7 +386,7 @@ def chat():
         if not use_fallback:
             try:
                 response = gemini_client.models.generate_content(
-                    model="gemini-3.8-flash",
+                    model="gemini-3.8-flash", 
                     contents=gemini_contents,
                     config=types.GenerateContentConfig(
                         system_instruction=instructions,
@@ -395,30 +394,34 @@ def chat():
                         thinking_config=types.ThinkingConfig(thinking_budget=0)
                     )
                 )
-
                 bot_response = response.text
             except Exception as e:
-                print(f"⚠️ Model chính lỗi: {e}")
+                print(f"⚠ Model chính lỗi: {e}")
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
                 use_fallback = True
 
-        if use_fallback:  # Đã sửa thành use_fallback để lập tức chạy nếu model chính sập
+        if use_fallback: 
             try:
+                fallback_config = types.GenerateContentConfig(
+                    system_instruction=instructions,
+                    temperature=0.7
+                )
+                
                 response = gemini_client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-3.5-flash-lite",
                     contents=gemini_contents,
-                    config=config,
+                    config=fallback_config, 
                 )
                 bot_response = response.text
             except Exception as e2:
-                print(f"⚠️ Model dự phòng lỗi: {e2}")
-                bot_response = "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
+                print(f"⚠ Model dự phòng lỗi: {e2}")
+                bot_response = "⚠ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
+
 
         if bot_response:
             bot_response = re.sub(r'[\*\#\_]+', '', bot_response)
         else:
-            # Phòng hờ nếu cả 2 model đều lỗi hoặc trả về chuỗi rỗng, không làm sập giao diện
             bot_response = "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
 
         is_searched = False
