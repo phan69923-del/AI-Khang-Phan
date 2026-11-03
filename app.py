@@ -55,7 +55,7 @@ except Exception as e:
     print(f"Lỗi kết nối MongoDB: {e}")
 
 # Bật biến này thành True khi muốn đóng web bảo trì, False mở 
-IS_MAINTENANCE = True
+IS_MAINTENANCE = False
 
 # KHAI BÁO ROUTE TRANG BẢO TRÌ ĐỨNG ĐỘC LẬP Ở ĐÂY
 @app.route("/maintenance")
