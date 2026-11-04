@@ -396,7 +396,7 @@ def chat():
                 )
                 bot_response = response.text
             except Exception as e:
-                print(f"⚠ Model chính lỗi: {e}")
+                print(f"⚠️ Model chính lỗi: {e}")
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
                 use_fallback = True
@@ -415,8 +415,8 @@ def chat():
                 )
                 bot_response = response.text
             except Exception as e2:
-                print(f"⚠ Model dự phòng lỗi: {e2}")
-                bot_response = "⚠ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
+                print(f"⚠️ Model dự phòng lỗi: {e2}")
+                bot_response = "⚠️ Hệ thống AI_KhangPhan đang nhận quá nhiều yêu cầu cùng một lúc. Vui lòng đợi 30 giây rồi thử lại nhé!😥"
 
 
         if bot_response:
