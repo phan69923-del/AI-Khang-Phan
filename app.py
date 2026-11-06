@@ -31,13 +31,10 @@ def check_anti_kia(user_message):
         if word in msg:
             return random.choice(khia_responses)
     return None
+
     
-
-
-# Lấy chuỗi URI từ biến môi trường trên Render
 uri = os.environ.get("MONGO_URI")
 
-# Kết nối MongoDB Atlas (Đã fix SSL và cấu hình chuẩn)
 mongo_client = MongoClient(
     uri, 
     server_api=ServerApi('1'),
@@ -57,30 +54,25 @@ except Exception as e:
 # Bật biến này thành True khi muốn đóng web bảo trì, False mở 
 IS_MAINTENANCE = False
 
-# KHAI BÁO ROUTE TRANG BẢO TRÌ ĐỨNG ĐỘC LẬP Ở ĐÂY
 @app.route("/maintenance")
 def maintenance_page():
     return render_template("maintenance.html")
 
 @app.before_request
 def before_request():
-    # Ngoại trừ trang bảo trì, API kiểm tra bảo trì và file tĩnh, còn lại nếu bật bảo trì sẽ ép chuyển hướng về /maintenance
     if IS_MAINTENANCE and request.endpoint not in ['maintenance_page', 'check_maintenance', 'static']:
         return redirect(url_for('maintenance_page'))
 
-# API đường dẫn để script ngầm ở index.html gọi hỏi trạng thái bảo trì
 @app.route('/check-maintenance')
 def check_maintenance():
     return jsonify({"is_maintenance": IS_MAINTENANCE})
 
-# FIX LỖI PROXY VÀ COOKIE TRÊN RENDER
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['JSON_AS_ASCII'] = False  # Hỗ trợ hiển thị tiếng Việt chuẩn trong JSON response
+app.config['JSON_AS_ASCII'] = False  
 
-# Khởi tạo OAuth cho Google Login
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -91,8 +83,6 @@ google = oauth.register(
         'scope': 'openid email profile'
     }
 )
-
-# Khởi tạo client Gemini đọc trực tiếp từ biến môi trường Render
 api_key = os.environ.get("GEMINI_API_KEY")
 gemini_client = genai.Client(api_key=api_key)
 
@@ -142,12 +132,10 @@ def save_user_sessions(user_sessions):
     except Exception as e:
         print(f"Lỗi khi lưu lịch sử chat vào MongoDB: {e}")
 
-# Vào trang chủ mặc định (/) sẽ hiện trang Đăng nhập trước
 @app.route("/")
 def index():
-    return render_template("login.html")
+    return render_template("index2.html")
 
-# Tạo một đường dẫn riêng (/guest) để trả về trang Trải nghiệm khách
 @app.route("/guest")
 def guest_chat():
     return render_template("index2.html")
