@@ -605,11 +605,17 @@
     </div>
 
     <div class="main-chat" id="mainChat">
-        <div class="chat-header">
-            <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
-                <img id="toggleIcon" src="/static/icon_mo.png" alt="Toggle Sidebar">
-            </button>
-        </div>
+<div class="chat-header">
+    <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
+        <img id="toggleIcon" src="/static/icon_mo.png" alt="Toggle Sidebar">
+    </button>
+
+    <div style="font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <a href="/privacy" target="_blank" style="color: #1a73e8; text-decoration: none;">🌐 Chính sách bảo mật</a> | 
+        <a href="/terms" target="_blank" style="color: #1a73e8; text-decoration: none;">📜 Điều khoản dịch vụ</a> | 
+        <a href="/security-commitment" target="_blank" style="color: #1a73e8; text-decoration: none;">🔒 Cam kết bảo mật AI KhangPhan</a>
+    </div>
+</div>
 
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">
