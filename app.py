@@ -450,7 +450,7 @@ def guest_chat_api():
         if not user_message:
             return {"response": "Thiếu thông tin tin nhắn hoặc hình ảnh!", "reply": "Thiếu thông tin tin nhắn hoặc hình ảnh!"}
 
-        api_key = os.environ.get("GEMINI_API_KEY")
+        api_key = os.environ.get("GEMINI_API_KEY2")
         if not api_key:
             return {"response": "Thiếu API Key!", "reply": "Thiếu API Key!"}
 
