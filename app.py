@@ -16,7 +16,7 @@ is_main_locked = False
 gemini_main_locked_until = 0
 
 app = Flask(__name__)
-ma_bi_mat = os.environ.get("MA_BI_MAT", "07062014")
+ma_bi_mat = os.environ.get("MA_BI_MAT")
 
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "chuoi_tạm_thời_khi_chạy_local")
 
