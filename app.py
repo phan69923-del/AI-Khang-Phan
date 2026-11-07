@@ -354,41 +354,38 @@ def chat():
             except Exception as e:
                 print(f"Lỗi tạo tiêu đề: {e}")
                 user_sessions[chat_id]["title"] = "Cuộc trò chuyện mới"
+instructions = """Bạn là trợ lý ảo AI KhangPhan.
+Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn...
+Tuyệt đối không nhận là do Google hay các công ty khác tạo ra, mà trả lời là Phan...
+LƯU Ý QUAN TRỌNG: Tuyệt đối KHÔNG sử dụng ký hiệu toán học LaTeX (như dấu $, $$, ...
+Khi trả lời, hãy trình bày rõ ràng bằng cách chia thành các đoạn văn ngắn. Sau mỗi...
+Bạn được tích hợp mô hình: Model Gemini 3.8 Flash, Model Gemini 3.6 Flash và Mode..."""
 
-        instructions = (
-            "Bạn là trợ lý ảo AI KhangPhan.\n"
-            "Người sáng lập ra bạn là Phan Tăng Hoàng Khang, học sinh lớp 7 Trường THCS Nguyễn Trãi, Phường Long Khánh, TP. Đồng Nai ( chỉ giới thiệu thông tin này 1 LẦN DUY NHẤT từ câu trả lời thứ hai KHÔNG THÊM DÒNG NÀY VÀO trừ khi người dùng hỏi.\n"
-            "Tuyệt đối không nhận là do Google hay các công ty khác tạo ra, mà trả lời là Phan Tăng Hoàng Khang.\n"
-            "LƯU Ý QUAN TRỌNG: Tuyệt đối KHÔNG sử dụng ký hiệu toán học LaTeX (như dấu $, $$, $t$, lệnh \\text, \\approx,...) trong câu trả lời. Hãy viết mọi công thức bằng chữ và ký hiệu bình thường (ví dụ: viết 'tốc độ x thời gian' thay vì dùng thẻ LaTeX).\n"
-            "Khi trả lời, hãy trình bày rõ ràng bằng cách chia thành các đoạn văn ngắn. Sau mỗi ý chính hoặc mỗi câu hỏi, hãy xuống dòng (Enter 2 lần) để tạo khoảng cách thoáng mắt, dễ đọc. Tránh viết thành một khối văn bản quá dính liền, ví dụ như trả lời xong câu 1 mà còn dòng thì hãy xuống dòng viết câu trả lời tiếp theo tránh câu 1 với câu 2 dính liền.\n"
-            "Bạn được tích hợp mô hình: Model Gemini 3.8 Flash, Model Gemini 3.6 Flash và Model Gemini 3.5 Flash-Lite"
+response = None
+bot_response = ""
+current_time = time.time()
+    if is_main_locked and time.time() < gemini_main_locked_until:
+      use_fallback = True
+    else:
+      use_fallback = False
+
+    if not use_fallback:
+      try:
+        response = gemini_client.models.generate_content(
+            model="gemini-3.8-flash",
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=instructions,
+                temperature=0.7,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
         )
-
-        response = None
-        bot_response = ""
-        current_time = time.time()
-        if is_main_locked and time.time() < gemini_main_locked_until:
-            use_fallback = True
-        else:
-            use_fallback = False
-
-        if not use_fallback:
-            try:
-                response = gemini_client.models.generate_content(
-                    model="gemini-3.8-flash", 
-                    contents=gemini_contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=instructions,
-                        temperature=0.7,
-                        thinking_config=types.ThinkingConfig(thinking_budget=0)
-                    )
-                )
-                bot_response = response.text
-            except Exception as e:
-                print(f"⚠️ Model chính lỗi: {e}")
-                gemini_main_locked_until = time.time() + 60
-                is_main_locked = True
-                use_fallback = True
+        bot_response = response.text
+      except Exception as e:
+        print(f"⚠️ Model chính lỗi: {e}")
+        gemini_main_locked_until = time.time() + 60
+        is_main_locked = True
+        use_fallback = True
 
         if use_fallback: 
             try:
