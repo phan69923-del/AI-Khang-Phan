@@ -145,70 +145,11 @@ def guest_chat():
 def login_page():
     return render_template("login.html")
 
-@app.route("/register-page")
-def register_page():
-    return render_template("register.html")
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return render_template("login.html")
 
-    if request.is_json:
-        data = request.get_json() or {}
-        username = data.get("username") or data.get("email")
-        password = data.get("password")
-    else:
-        username = request.form.get("username") or request.form.get("email")
-        password = request.form.get("password")
-
-    if not username or not password:
-        if request.is_json:
-            return jsonify({"success": False, "error": "Thiếu thông tin đăng nhập!"}), 400
-        return render_template("login.html", error="Thiếu thông tin đăng nhập!")
-
-    user_in_db = users_collection.find_one({"username": username})
-    if user_in_db and user_in_db.get("password") == password:
-        session["user"] = username
-        if request.is_json:
-            return jsonify({"success": True, "redirect": "/"})
-        return redirect(url_for("index"))
-
-    if request.is_json:
-        return jsonify({"success": False, "error": "Tài khoản hoặc mật khẩu không chính xác!"}), 401
-    
-    return render_template("login.html", error="Tài khoản hoặc mật khẩu không chính xác!")
-
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "GET":
-        return render_template("register.html")
-
-    if request.is_json:
-        data = request.get_json() or {}
-        username = data.get("username") or data.get("email")
-        password = data.get("password")
-    else:
-        username = request.form.get("username") or request.form.get("email")
-        password = request.form.get("password")
-
-    if not username or not password:
-        if request.is_json:
-            return jsonify({"success": False, "error": "Thiếu thông tin đăng ký!"}), 400
-        return render_template("register.html", error="Thiếu thông tin đăng ký!")
-
-    existing_user = users_collection.find_one({"username": username})
-    if existing_user:
-        if request.is_json:
-            return jsonify({"success": False, "error": "Tài khoản này đã tồn tại!"}), 400
-        return render_template("register.html", error="Tài khoản này đã tồn tại!")
-
-    users_collection.insert_one({"username": username, "password": password})
-    session["user"] = username
-    
-    if request.is_json:
-        return jsonify({"success": True, "redirect": "/"})
-    return redirect(url_for("index"))
 
 @app.route("/login/google")
 def login_google():
