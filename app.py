@@ -421,7 +421,7 @@ current_time = time.time()
                 gemini_main_locked_until = time.time() + 60
                 is_main_locked = True
                 use_fallback = True
->>>>>>> 4f5b463b657d89b8e28d185e953add81ed7fd89a
+4f5b463b657d89b8e28d185e953add81ed7fd89a
 
         if use_fallback: 
             try:
